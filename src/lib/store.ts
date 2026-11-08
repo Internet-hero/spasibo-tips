@@ -31,7 +31,7 @@ const isString = (value: unknown): value is string => typeof value === 'string'
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 
 // Лёгкая проверка формы состояния: без библиотек, чтобы не тянуть валидатор в бандл статического демо.
-function isValidState(value: unknown): value is DemoState {
+export function isValidState(value: unknown): value is DemoState {
   if (!isObject(value) || value.version !== 3) return false
   const { merchants, employees, payments, qr_links, audit, session } = value
   if (!Array.isArray(merchants) || !Array.isArray(employees) || !Array.isArray(payments) || !Array.isArray(qr_links) || !Array.isArray(audit)) return false
@@ -226,11 +226,15 @@ export function cancelPaymentInState(current: DemoState, paymentId: string): Dem
   }
 }
 
-function checkRateLimit(qrId: string) {
-  const now = Date.now()
+// NFR-5: не больше 10 новых попыток на один QR за 60 секунд. Время передаётся параметром, чтобы правило тестировалось.
+export function checkRateLimit(qrId: string, now = Date.now()) {
   const recent = (attempts.get(qrId) ?? []).filter((timestamp) => now - timestamp < 60_000)
   if (recent.length >= 10) throw new DemoError('RATE_LIMITED', 'Слишком много попыток. Повторите через минуту', 429, true)
   attempts.set(qrId, [...recent, now])
+}
+
+export function resetRateLimit() {
+  attempts.clear()
 }
 
 export const demoActions = {

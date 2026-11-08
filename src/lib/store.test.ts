@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createSeedState } from '@/lib/demo'
 import { employeeReport, maskPaymentDetails, merchantReport, paymentRange, reportId } from '@/lib/domain'
 import { calcAmounts, gatewayHash, signQrPayload, verifyQrSignature } from '@/lib/qr'
-import { cancelPaymentInState, confirmPaymentInState, createPaymentInState, resolvePaymentInState, submitReviewInState, validateQr } from '@/lib/store'
+import { cancelPaymentInState, checkRateLimit, confirmPaymentInState, createPaymentInState, isValidState, resetRateLimit, resolvePaymentInState, submitReviewInState, validateQr } from '@/lib/store'
 import type { PaymentInput } from '@/types'
 
 const input = (patch: Partial<PaymentInput> = {}): PaymentInput => ({
@@ -185,5 +185,35 @@ describe('Отзыв, суммы и диапазон отчёта', () => {
     expect(reportId('m_001', '2025-11')).toMatch(/^rep_\d{4}$/)
     expect(reportId('m_001', '2025-11')).toBe(reportId('m_001', '2025-11'))
     expect(reportId('m_001', '2025-11')).not.toBe(reportId('m_002', '2025-11'))
+  })
+})
+
+describe('Правила NFR-5 и целостность состояния', () => {
+  it('пропускает 10 попыток в минуту и отклоняет одиннадцатую', () => {
+    resetRateLimit()
+    const started = 1_700_000_000_000
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(() => checkRateLimit('qr_rate', started + attempt)).not.toThrow()
+    }
+    expect(() => checkRateLimit('qr_rate', started + 11)).toThrowError(expect.objectContaining({ code: 'RATE_LIMITED', httpStatus: 429, retryable: true }))
+    expect(() => checkRateLimit('qr_rate', started + 61_000)).not.toThrow()
+    resetRateLimit()
+  })
+
+  it('не сжигает QR при отмене, но сжигает после успешной оплаты', () => {
+    const seed = createSeedState()
+    const created = createPaymentInState(seed, input())
+    const canceled = cancelPaymentInState(created.state, created.payment.payment_id)
+    expect(canceled.qr_links.find((qr) => qr.qr_id === 'qr_001')?.used).toBe(false)
+    const paid = confirmPaymentInState(created.state, created.payment.payment_id)
+    expect(paid.qr_links.find((qr) => qr.qr_id === 'qr_001')?.used).toBe(true)
+  })
+
+  it('отличает валидное состояние от повреждённого', () => {
+    expect(isValidState(createSeedState())).toBe(true)
+    expect(isValidState({ version: 3 })).toBe(false)
+    expect(isValidState({ ...createSeedState(), merchants: {} })).toBe(false)
+    expect(isValidState(null)).toBe(false)
+    expect(isValidState({ ...createSeedState(), version: 2 })).toBe(false)
   })
 })
