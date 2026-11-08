@@ -40,7 +40,7 @@ test('мерчант получает отчёт, рассчитанный из 
   await loginAs(page, 'manager')
   await expect(page.getByRole('heading', { name: 'Отчёт по чаевым' })).toBeVisible()
   await expect(page.getByText('1 031,25 ₽', { exact: true })).toBeVisible()
-  await expect(page.getByText('23.54%', { exact: true })).toBeVisible()
+  await expect(page.getByText('23,54%', { exact: true })).toBeVisible()
   await expect(page.getByText('83%', { exact: true })).toBeVisible()
   expect(errors).toEqual([])
 })

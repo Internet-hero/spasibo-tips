@@ -89,3 +89,47 @@ export function dailyReport(state: DemoState, merchantId: string, from: string, 
   }
   return days
 }
+
+export type DailyPoint = ReturnType<typeof dailyReport>[number]
+export type ChartGranularity = 'day' | 'week' | 'month'
+
+const chartLabel = (date: Date, granularity: ChartGranularity) => {
+  if (granularity === 'month') return new Intl.DateTimeFormat('ru-RU', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(date)
+  if (granularity === 'week') return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(date)
+  return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', timeZone: 'UTC' }).format(date)
+}
+
+// Длинный период нельзя рисовать по дням: год — это 365 столбиков. Сворачиваем по неделям и месяцам,
+// чтобы график оставался читаемым, а суммы не терялись.
+export function chartSeries(days: DailyPoint[]): { points: { date: string; day: string; tips_total: number; payments_count: number; avg_tip_pct: number }[]; granularity: ChartGranularity } {
+  const granularity: ChartGranularity = days.length <= 31 ? 'day' : days.length <= 120 ? 'week' : 'month'
+  if (granularity === 'day') return { points: days, granularity }
+
+  const buckets = new Map<string, { date: string; tips_total: number; payments_count: number; weightedPct: number }>()
+  for (const day of days) {
+    const date = new Date(`${day.date}T00:00:00Z`)
+    let key = day.date
+    if (granularity === 'month') {
+      key = day.date.slice(0, 7)
+    } else {
+      const monday = new Date(date)
+      const shift = (monday.getUTCDay() + 6) % 7
+      monday.setUTCDate(monday.getUTCDate() - shift)
+      key = monday.toISOString().slice(0, 10)
+    }
+    const bucket = buckets.get(key) ?? { date: key, tips_total: 0, payments_count: 0, weightedPct: 0 }
+    bucket.tips_total = Math.round((bucket.tips_total + day.tips_total) * 100) / 100
+    bucket.payments_count += day.payments_count
+    bucket.weightedPct += day.avg_tip_pct * day.payments_count
+    buckets.set(key, bucket)
+  }
+
+  const points = [...buckets.values()].map((bucket) => ({
+    date: bucket.date,
+    day: chartLabel(new Date(`${bucket.date}T00:00:00Z`), granularity),
+    tips_total: bucket.tips_total,
+    payments_count: bucket.payments_count,
+    avg_tip_pct: bucket.payments_count ? Math.round(bucket.weightedPct / bucket.payments_count * 100) / 100 : 0,
+  }))
+  return { points, granularity }
+}

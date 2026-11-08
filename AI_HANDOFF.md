@@ -285,7 +285,7 @@ Playwright запускает `npm run preview` на `127.0.0.1:7100`, поэт�
 Последнее подтверждённое состояние перед созданием этого документа:
 
 - production build — успешно;
-- Vitest — 25/25;
+- Vitest — 27/27;
 - ESLint — успешно;
 - Playwright — 24/24;
 - `git diff --check` — без ошибок.

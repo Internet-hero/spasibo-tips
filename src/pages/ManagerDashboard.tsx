@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { DashboardShell } from '@/components/DashboardShell'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { dailyReport, formatMoney, merchantReport, paymentRange, paymentTotal } from '@/lib/domain'
+import { chartSeries, dailyReport, formatMoney, merchantReport, paymentRange, paymentTotal } from '@/lib/domain'
 import { useDemoState } from '@/lib/store'
 
 export default function ManagerDashboard() {
@@ -19,6 +19,8 @@ export default function ManagerDashboard() {
   const [to, setTo] = useState(defaultRange.to)
   const report = useMemo(() => merchantReport(state, merchantId, from, to), [state, merchantId, from, to])
   const daily = useMemo(() => dailyReport(state, merchantId, from, to), [state, merchantId, from, to])
+  const chart = useMemo(() => chartSeries(daily), [daily])
+  const granularityNote = chart.granularity === 'day' ? 'по дням' : chart.granularity === 'week' ? 'по неделям' : 'по месяцам'
   const notice = (location.state as { notice?: string } | null)?.notice
   const payments = state.payments.filter((payment) => payment.merchant_id === merchantId && payment.timestamp.slice(0, 10) >= from && payment.timestamp.slice(0, 10) <= to).sort((a, b) => b.timestamp.localeCompare(a.timestamp))
   const latest = payments.slice(0, 8)
@@ -44,12 +46,12 @@ export default function ManagerDashboard() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Отчёт мерчанта">
         <Stat title="Сумма чаевых" value={formatMoney(report.tips_total)} note="По SUCCESS" icon={Wallet} featured />
         <Stat title="Платежей" value={String(report.payments_count)} note="Все статусы за период" icon={ReceiptText} />
-        <Stat title="Средний %" value={`${report.avg_tip_pct.toFixed(2)}%`} note="Среднее tip / amount" icon={TrendingUp} />
+        <Stat title="Средний %" value={`${new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(report.avg_tip_pct)}%`} note="Среднее tip / amount" icon={TrendingUp} />
         <Stat title="Успешных" value={`${Math.round(report.success_rate * 100)}%`} note="SUCCESS / все платежи" icon={Percent} />
       </section>
       <section className="surface mt-6 min-w-0 p-4 sm:p-6">
-        <div><h2 className="text-lg font-extrabold">Отчёт по дням</h2><p className="text-sm text-muted-foreground">Сумма чаевых SUCCESS, ₽</p></div>
-        <div className="mt-6 h-64 w-full" aria-label="График чаевых по дням"><ResponsiveContainer width="100%" height="100%"><BarChart data={daily} margin={{ top: 4, right: 0, left: -22, bottom: 0 }}><CartesianGrid vertical={false} stroke="#dce5dc" strokeDasharray="3 3" /><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#52675f', fontSize: 10 }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#52675f', fontSize: 12 }} /><Tooltip cursor={{ fill: '#eef3ec' }} formatter={(value) => [`${value} ₽`, 'Чаевые']} /><Bar dataKey="tips_total" fill="#ee8666" radius={[7, 7, 2, 2]} isAnimationActive={false} /></BarChart></ResponsiveContainer></div>
+        <div><h2 className="text-lg font-extrabold">Отчёт {granularityNote}</h2><p className="text-sm text-muted-foreground">Сумма чаевых SUCCESS, ₽</p></div>
+        <div className="mt-6 h-64 w-full" aria-label={`График чаевых ${granularityNote}`}><ResponsiveContainer width="100%" height="100%"><BarChart data={chart.points} margin={{ top: 4, right: 0, left: -22, bottom: 0 }}><CartesianGrid vertical={false} stroke="#dce5dc" strokeDasharray="3 3" /><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#52675f', fontSize: 10 }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#52675f', fontSize: 12 }} /><Tooltip cursor={{ fill: '#eef3ec' }} formatter={(value) => [`${value} ₽`, 'Чаевые']} /><Bar dataKey="tips_total" fill="#e26140" radius={[7, 7, 2, 2]} isAnimationActive={false} /></BarChart></ResponsiveContainer></div>
       </section>
       <section className="surface mt-6 overflow-hidden">
         <div className="p-5 sm:p-6"><h2 className="text-lg font-extrabold">Платежи за период</h2><p className="text-sm text-muted-foreground">Полный журнал мерчанта со статусами</p></div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createSeedState } from '@/lib/demo'
-import { employeeReport, maskPaymentDetails, merchantReport, paymentRange, reportId } from '@/lib/domain'
+import { chartSeries, employeeReport, maskPaymentDetails, merchantReport, paymentRange, reportId } from '@/lib/domain'
 import { calcAmounts, gatewayHash, signQrPayload, verifyQrSignature } from '@/lib/qr'
 import { cancelPaymentInState, checkRateLimit, confirmPaymentInState, createPaymentInState, isValidState, resetRateLimit, resolvePaymentInState, submitReviewInState, validateQr } from '@/lib/store'
 import type { PaymentInput } from '@/types'
@@ -239,5 +239,33 @@ describe('Совместимость с исходными данными и п�
       expect(verifyQrSignature(qr)).toBe(true)
       expect(new Date(qr.exp).getTime()).toBeGreaterThan(Date.now())
     }
+  })
+})
+
+describe('График отчёта', () => {
+  const day = (index: number, tip: number) => ({
+    date: new Date(Date.UTC(2025, 0, 1 + index)).toISOString().slice(0, 10),
+    day: String(index + 1),
+    tips_total: tip,
+    payments_count: tip > 0 ? 1 : 0,
+    avg_tip_pct: tip > 0 ? 10 : 0,
+  })
+
+  it('рисует длинный период по месяцам, а не по дням', () => {
+    const days = Array.from({ length: 365 }, (_, index) => day(index, index === 0 ? 100 : 0))
+    const series = chartSeries(days)
+    expect(series.granularity).toBe('month')
+    expect(series.points).toHaveLength(12)
+    expect(series.points[0].tips_total).toBe(100)
+    expect(series.points.reduce((sum, point) => sum + point.tips_total, 0)).toBe(100)
+  })
+
+  it('сворачивает средний период по неделям и оставляет короткий по дням', () => {
+    const month = Array.from({ length: 60 }, (_, index) => day(index, 10))
+    expect(chartSeries(month).granularity).toBe('week')
+    expect(chartSeries(month).points.reduce((sum, point) => sum + point.tips_total, 0)).toBe(600)
+    const week = Array.from({ length: 7 }, (_, index) => day(index, 10))
+    expect(chartSeries(week).granularity).toBe('day')
+    expect(chartSeries(week).points).toHaveLength(7)
   })
 })
