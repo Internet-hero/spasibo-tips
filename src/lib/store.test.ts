@@ -217,3 +217,27 @@ describe('Правила NFR-5 и целостность состояния', ()
     expect(isValidState({ ...createSeedState(), version: 2 })).toBe(false)
   })
 })
+
+describe('Совместимость с исходными данными и прототипом', () => {
+  it('подпись из qr_links.csv совпадает с HMAC веб-приложения', () => {
+    // Строки взяты из case_3_tips/qr_links.csv: тот же payload должен давать ту же подпись,
+    // что в CSV и в CLI-прототипе, иначе контракт QR разъедется.
+    const rows = [
+      { merchant_id: 'm_001', employee_id: 'e_001', receipt_id: 'r_1001', nonce: 'c82561', exp: '2025-11-01T23:59:00Z', signature: '68d0f361ac38c12b' },
+      { merchant_id: 'm_001', employee_id: 'e_002', receipt_id: 'r_1002', nonce: 'a6bbc9', exp: '2025-11-01T23:59:00Z', signature: '651b504dbe897c0e' },
+      { merchant_id: 'm_001', employee_id: 'e_003', receipt_id: 'r_1003', nonce: '4443ae', exp: '2025-11-01T23:59:00Z', signature: 'e42db7c2c59521c8' },
+    ]
+    for (const row of rows) {
+      expect(signQrPayload(row)).toBe(row.signature)
+    }
+  })
+
+  it('seed пересчитывает подпись, когда обновляет срок действия демо-QR', () => {
+    const seed = createSeedState()
+    for (const qrId of ['qr_001', 'qr_002', 'qr_003']) {
+      const qr = seed.qr_links.find((item) => item.qr_id === qrId)!
+      expect(verifyQrSignature(qr)).toBe(true)
+      expect(new Date(qr.exp).getTime()).toBeGreaterThan(Date.now())
+    }
+  })
+})
