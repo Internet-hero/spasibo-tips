@@ -7,7 +7,7 @@ import { StaffAvatar } from '@/components/StaffAvatar'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { formatMoney, paymentTotal } from '@/lib/domain'
-import { demoActions, useDemoState } from '@/lib/store'
+import { DemoError, demoActions, useDemoState } from '@/lib/store'
 
 export default function PaymentStatus() {
   const { paymentId = '' } = useParams()
@@ -16,7 +16,7 @@ export default function PaymentStatus() {
   const reviewRequested = searchParams.get('review') === '1'
   const [reviewOpen, setReviewOpen] = useState(reviewRequested)
   const [review, setReview] = useState('')
-  const [reviewSent, setReviewSent] = useState(false)
+  const [reviewError, setReviewError] = useState('')
   const payment = state.payments.find((item) => item.payment_id === paymentId)
   const employee = state.employees.find((item) => item.employee_id === payment?.employee_id)
   if (!payment || !employee) return <div className="grid min-h-[100dvh] place-items-center p-5 text-center"><div><h1 className="display-font text-2xl">Платёж не найден</h1><Button asChild className="mt-5 rounded-full"><Link to="/">На главную</Link></Button></div></div>
@@ -28,8 +28,16 @@ export default function PaymentStatus() {
   const description = success ? `${employee.name} получит ваши чаевые. Спасибо за поддержку команды!` : pending ? 'Операция обрабатывается. Нажмите «Проверить статус», чтобы завершить обработку.' : declined ? 'Шлюз отклонил операцию. Деньги не списаны.' : canceled ? 'Платёж отменён до подтверждения, списания не было.' : 'Платёж ожидает подтверждения клиентом.'
   const submitReview = (event: FormEvent) => {
     event.preventDefault()
-    if (review.trim()) setReviewSent(true)
+    setReviewError('')
+    try {
+      demoActions.submitReview(payment.payment_id, review)
+      setReviewOpen(false)
+    } catch (caught) {
+      setReviewError(caught instanceof DemoError ? caught.message : 'Не удалось сохранить отзыв')
+    }
   }
+  const reviewSent = Boolean(payment.review)
+  const retryUrl = `/p/${payment.qr_id}?tip=${Math.min(50, Math.round(payment.tip / payment.amount * 100))}`
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-background pb-[env(safe-area-inset-bottom)]">
       <header className="page-container py-3"><Logo /></header>
@@ -50,16 +58,18 @@ export default function PaymentStatus() {
           </dl>
           {success && <div className="mb-6 flex items-center justify-center gap-3"><StaffAvatar member={employee} size="md" /><div className="text-left"><p className="font-extrabold">{employee.name}</p><p className="text-sm text-muted-foreground">{employee.position}</p></div></div>}
           {success && !reviewOpen && !reviewSent && <Button variant="outline" size="lg" className="mb-3 w-full rounded-2xl" onClick={() => setReviewOpen(true)}><MessageSquareText />Оставить отзыв о работе</Button>}
+          {success && reviewSent && !reviewOpen && <p className="mb-4 rounded-2xl bg-secondary/60 p-4 text-sm font-bold text-primary" role="status">Ваш отзыв сохранён: «{payment.review}»</p>}
           {success && reviewOpen && !reviewSent && <form onSubmit={submitReview} className="mb-4 rounded-2xl border bg-card p-4 text-left">
             {reviewRequested && <p className="mb-3 text-sm text-muted-foreground">Вы выбрали больше 50%, поэтому чаевые установлены на максимум. Расскажите, что именно понравилось!</p>}
             <label htmlFor="employee-review" className="field-label">Ваш отзыв о работе {employee.name}</label>
             <textarea id="employee-review" value={review} onChange={(event) => setReview(event.target.value)} required minLength={3} className="min-h-24 w-full rounded-2xl border bg-background p-3 text-sm outline-none focus:border-primary" placeholder="Что вам понравилось?" />
+            {reviewError && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{reviewError}</p>}
             <Button type="submit" className="mt-3 w-full rounded-2xl"><Send />Отправить отзыв</Button>
           </form>}
-          {success && reviewSent && <p className="mb-4 rounded-2xl bg-secondary/60 p-4 text-sm font-bold text-primary" role="status">Спасибо! Ваш отзыв отправлен.</p>}
           <div className="grid gap-3">
             {pending && <Button size="lg" className="rounded-2xl" onClick={() => demoActions.resolvePayment(payment.payment_id)}><RotateCcw />Проверить статус</Button>}
             {payment.status === 'CREATED' && <Button size="lg" variant="outline" className="rounded-2xl" onClick={() => demoActions.cancelPayment(payment.payment_id)}>Отменить платёж</Button>}
+            {declined && <Button asChild size="lg" className="rounded-2xl"><Link to={retryUrl}><RotateCcw />Попробовать снова</Link></Button>}
             <Button asChild size="lg" variant={success || pending ? 'outline' : 'default'} className="rounded-2xl"><Link to="/"><Home />На главную</Link></Button>
           </div>
           <p className="mt-5 break-all font-mono text-xs text-muted-foreground">{payment.payment_id} · {payment.qr_id}<ArrowRight className="ml-1 inline size-3" />{payment.status}</p>

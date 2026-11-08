@@ -5,7 +5,25 @@ export const formatMoney = (value: number, withCurrency = true) => {
   return withCurrency ? `${formatted} ₽` : formatted
 }
 
-export const paymentTotal = (payment: Pick<Payment, 'amount' | 'tip'>) => Math.round((payment.amount + payment.tip) * 100) / 100
+export const paymentTotal = (payment: Pick<Payment, 'amount' | 'tip'> & { amount_total?: number }) =>
+  payment.amount_total ?? Math.round((payment.amount + payment.tip) * 100) / 100
+
+// Диапазон дат по фактическим платежам: отчёт по умолчанию должен показывать данные, а не фиксированный месяц.
+export function paymentRange(payments: Payment[]): { from: string; to: string } {
+  if (payments.length === 0) {
+    const today = new Date().toISOString().slice(0, 10)
+    return { from: today, to: today }
+  }
+  const dates = payments.map((payment) => payment.timestamp.slice(0, 10)).sort()
+  return { from: dates[0], to: dates[dates.length - 1] }
+}
+
+// report_id по ТЗ имеет вид rep_NNNN; отчёт вычисляется на лету, поэтому id детерминированный.
+export function reportId(merchantId: string, period: string) {
+  let hash = 0
+  for (const char of `${merchantId}|${period}`) hash = (hash * 31 + char.charCodeAt(0)) % 10000
+  return `rep_${String(hash).padStart(4, '0')}`
+}
 
 export function maskPaymentDetails(value: string) {
   const digits = value.replace(/\D/g, '')
@@ -25,9 +43,11 @@ export function merchantReport(state: DemoState, merchantId: string, from: strin
   const avgTipPct = successful.length
     ? successful.reduce((sum, payment) => sum + payment.tip / payment.amount * 100, 0) / successful.length
     : 0
+  const period = from.slice(0, 7) === to.slice(0, 7) ? from.slice(0, 7) : `${from} — ${to}`
   return {
+    report_id: reportId(merchantId, period),
     merchant_id: merchantId,
-    period: from.slice(0, 7) === to.slice(0, 7) ? from.slice(0, 7) : `${from} — ${to}`,
+    period,
     tips_total: Math.round(tipsTotal * 100) / 100,
     payments_count: payments.length,
     avg_tip_pct: Math.round(avgTipPct * 100) / 100,

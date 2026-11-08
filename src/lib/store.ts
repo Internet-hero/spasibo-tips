@@ -26,13 +26,33 @@ export class DemoError extends Error {
   }
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+const isString = (value: unknown): value is string => typeof value === 'string'
+const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
+// Лёгкая проверка формы состояния: без библиотек, чтобы не тянуть валидатор в бандл статического демо.
+function isValidState(value: unknown): value is DemoState {
+  if (!isObject(value) || value.version !== 3) return false
+  const { merchants, employees, payments, qr_links, audit, session } = value
+  if (!Array.isArray(merchants) || !Array.isArray(employees) || !Array.isArray(payments) || !Array.isArray(qr_links) || !Array.isArray(audit)) return false
+  if (session !== null && !isObject(session)) return false
+  if (merchants.some((item) => !isObject(item) || !isString(item.merchant_id) || !isString(item.name))) return false
+  if (employees.some((item) => !isObject(item) || !isString(item.employee_id) || !isString(item.merchant_id) || !isString(item.name) || typeof item.active !== 'boolean')) return false
+  if (payments.some((item) => !isObject(item) || !isString(item.payment_id) || !isString(item.qr_id) || !isNumber(item.amount) || !isNumber(item.tip) || !isString(item.status) || !isString(item.timestamp))) return false
+  if (qr_links.some((item) => !isObject(item) || !isString(item.qr_id) || !isString(item.receipt_id) || !isNumber(item.base_amount) || typeof item.used !== 'boolean')) return false
+  if (audit.some((item) => !isObject(item) || !isString(item.event_id) || !isString(item.action))) return false
+  return true
+}
+
 const loadState = (): DemoState => {
   if (typeof window === 'undefined') return createSeedState()
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY)
     if (saved) {
-      const parsed = JSON.parse(saved) as DemoState
-      if (parsed.version === 3) return parsed
+      const parsed = JSON.parse(saved)
+      // Битое или несовместимое состояние не должно ломать демо: проверяем форму и откатываемся к seed.
+      if (isValidState(parsed)) return parsed
+      window.localStorage.removeItem(STORAGE_KEY)
     }
   } catch {
     // Повреждённый локальный черновик не блокирует демо.
@@ -114,7 +134,8 @@ export function createPaymentInState(current: DemoState, input: PaymentInput): {
   if (!Number.isFinite(input.tip_pct) || input.tip_pct < 0 || input.tip_pct > 50) {
     throw new DemoError('TIP_OUT_OF_RANGE', 'Чаевые должны быть от 0% до 50% суммы чека')
   }
-  const { tip } = calcAmounts(qr.base_amount, input.tip_pct)
+  const { tip, total } = calcAmounts(qr.base_amount, input.tip_pct)
+  if (total > 2_000_000) throw new DemoError('AMOUNT_OUT_OF_RANGE', 'Итоговая сумма не должна превышать 2 000 000 ₽')
   const payment: Payment = {
     payment_id: nextNumericId(current.payments.map((item) => item.payment_id), 'p_', 4),
     merchant_id: qr.merchant_id,
@@ -122,6 +143,8 @@ export function createPaymentInState(current: DemoState, input: PaymentInput): {
     qr_id: qr.qr_id,
     amount: qr.base_amount,
     tip,
+    amount_total: total,
+    tip_amount: tip,
     status: 'CREATED',
     timestamp: new Date().toISOString(),
     idempotency_key: input.idempotency_key,
@@ -132,7 +155,7 @@ export function createPaymentInState(current: DemoState, input: PaymentInput): {
     state: {
       ...current,
       payments: [payment, ...current.payments],
-      qr_links: current.qr_links.map((item) => item.qr_id === qr.qr_id ? { ...item, used: true } : item),
+      // QR освобождается до успешной оплаты: связь QR → Payment = 1:N, несколько попыток на один чек.
       audit: [...current.audit, event],
     },
     payment,
@@ -155,6 +178,10 @@ export function confirmPaymentInState(current: DemoState, paymentId: string): De
   return {
     ...current,
     payments: current.payments.map((item) => item.payment_id === paymentId ? confirmed : item),
+    // Немаркированный успехом QR остаётся доступным для повторной попытки (отказ шлюза не сжигает чек).
+    qr_links: result.status === 'SUCCESS'
+      ? current.qr_links.map((item) => item.qr_id === payment.qr_id ? { ...item, used: true } : item)
+      : current.qr_links,
     audit: events,
   }
 }
@@ -168,7 +195,21 @@ export function resolvePaymentInState(current: DemoState, paymentId: string): De
   return {
     ...current,
     payments: current.payments.map((item) => item.payment_id === paymentId ? resolved : item),
+    qr_links: current.qr_links.map((item) => item.qr_id === payment.qr_id ? { ...item, used: true } : item),
     audit: [...current.audit, event],
+  }
+}
+
+export function submitReviewInState(current: DemoState, paymentId: string, review: string): DemoState {
+  const payment = current.payments.find((item) => item.payment_id === paymentId)
+  if (!payment) throw new DemoError('PAYMENT_NOT_FOUND', 'Платёж не найден', 404)
+  if (payment.status !== 'SUCCESS') throw new DemoError('REVIEW_NOT_ALLOWED', 'Отзыв можно оставить только по успешному платежу', 409)
+  const text = review.trim().slice(0, 500)
+  if (text.length < 3) throw new DemoError('REVIEW_TOO_SHORT', 'Напишите хотя бы три символа', 422)
+  const reviewed: Payment = { ...payment, review: text, reviewed_at: new Date().toISOString() }
+  return {
+    ...current,
+    payments: current.payments.map((item) => item.payment_id === paymentId ? reviewed : item),
   }
 }
 
@@ -205,6 +246,9 @@ export const demoActions = {
   },
   resolvePayment(paymentId: string) {
     commit(resolvePaymentInState(getState(), paymentId))
+  },
+  submitReview(paymentId: string, review: string) {
+    commit(submitReviewInState(getState(), paymentId, review))
   },
   cancelPayment(paymentId: string) {
     commit(cancelPaymentInState(getState(), paymentId))

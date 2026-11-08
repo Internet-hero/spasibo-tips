@@ -4,14 +4,15 @@ import { DashboardShell } from '@/components/DashboardShell'
 import { QrGenerator } from '@/components/QrGenerator'
 import { StaffAvatar } from '@/components/StaffAvatar'
 import { StatusBadge } from '@/components/StatusBadge'
-import { employeeReport, formatMoney, paymentTotal } from '@/lib/domain'
+import { employeeReport, formatMoney, paymentRange, paymentTotal } from '@/lib/domain'
 import { useDemoState } from '@/lib/store'
 
 export default function StaffDashboard() {
   const state = useDemoState()
   const employee = state.employees.find((item) => item.employee_id === state.session?.employee_id)
-  const [from, setFrom] = useState('2025-11-01')
-  const [to, setTo] = useState('2025-11-30')
+  const defaultRange = useMemo(() => paymentRange(state.payments.filter((payment) => payment.employee_id === state.session?.employee_id)), [state.payments, state.session?.employee_id])
+  const [from, setFrom] = useState(defaultRange.from)
+  const [to, setTo] = useState(defaultRange.to)
   const report = useMemo(() => employee ? employeeReport(state, employee.employee_id, from, to) : null, [state, employee, from, to])
   if (!employee || !report) return null
   const payments = state.payments.filter((payment) => payment.employee_id === employee.employee_id).sort((a, b) => b.timestamp.localeCompare(a.timestamp))
@@ -29,7 +30,7 @@ export default function StaffDashboard() {
       </section>
       <section className="surface mt-6 overflow-hidden">
         <div className="p-5 sm:p-6"><h2 className="text-lg font-extrabold">Мои платежи</h2><p className="text-sm text-muted-foreground">Сумма чека, чаевые, итог и статус оплаты</p></div>
-        <div className="overflow-x-auto"><table className="admin-table min-w-[680px]"><thead><tr><th>Дата</th><th>Платёж / чек</th><th>Чаевые</th><th>Итого</th><th>Статус</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.payment_id}><td>{new Date(payment.timestamp).toLocaleString('ru-RU')}</td><td><p className="font-bold">{payment.payment_id}</p><p className="text-xs text-muted-foreground">{payment.qr_id}</p></td><td className="font-extrabold">{formatMoney(payment.tip)}</td><td>{formatMoney(paymentTotal(payment))}</td><td><StatusBadge status={payment.status} /></td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="admin-table min-w-[680px]"><thead><tr><th>Дата</th><th>Платёж / чек</th><th>Чаевые</th><th>Итого</th><th>Статус</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.payment_id}><td>{new Date(payment.timestamp).toLocaleString('ru-RU')}</td><td><p className="font-bold">{payment.payment_id}</p><p className="text-xs text-muted-foreground">{payment.qr_id}</p>{payment.review && <p className="mt-1 max-w-56 text-xs font-semibold text-primary">«{payment.review}»</p>}</td><td className="font-extrabold">{formatMoney(payment.tip)}</td><td>{formatMoney(paymentTotal(payment))}</td><td><StatusBadge status={payment.status} /></td></tr>)}</tbody></table></div>
         {payments.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Ваши платежи появятся после первого клиента.</p>}
       </section>
       <section className="mt-8"><div className="mb-4 flex items-start gap-3"><ShieldCheck className="mt-1 size-5 text-primary" /><div><h2 className="text-xl font-extrabold">QR на новый чек</h2><p className="text-sm text-muted-foreground">QR будет привязан только к вам и указанному receipt_id.</p></div></div><QrGenerator fixedEmployeeId={employee.employee_id} /></section>

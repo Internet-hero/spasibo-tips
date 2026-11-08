@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createSeedState } from '@/lib/demo'
-import { employeeReport, maskPaymentDetails, merchantReport } from '@/lib/domain'
+import { employeeReport, maskPaymentDetails, merchantReport, paymentRange, reportId } from '@/lib/domain'
 import { calcAmounts, gatewayHash, signQrPayload, verifyQrSignature } from '@/lib/qr'
-import { cancelPaymentInState, confirmPaymentInState, createPaymentInState, resolvePaymentInState, validateQr } from '@/lib/store'
+import { cancelPaymentInState, confirmPaymentInState, createPaymentInState, resolvePaymentInState, submitReviewInState, validateQr } from '@/lib/store'
 import type { PaymentInput } from '@/types'
 
 const input = (patch: Partial<PaymentInput> = {}): PaymentInput => ({
@@ -70,12 +70,17 @@ describe('QR: подпись, TTL, чек и границы', () => {
     expect(performance.now() - started).toBeLessThan(50)
   })
 
-  it('отклоняет истёкший QR, неверный receipt_id и использованный nonce', () => {
+  it('отклоняет истёкший QR и неверный receipt_id, а QR сжигает только успешная оплата', () => {
     const seed = createSeedState()
     expect(() => validateQr(seed, 'qr_004')).toThrowError(expect.objectContaining({ code: 'QR_EXPIRED' }))
     expect(() => validateQr(seed, 'qr_001', 'r_9999')).toThrowError(expect.objectContaining({ code: 'RECEIPT_MISMATCH' }))
-    const created = createPaymentInState(seed, input())
-    expect(() => createPaymentInState(created.state, input({ idempotency_key: 'another-key' }))).toThrowError(expect.objectContaining({ code: 'QR_USED' }))
+    // Связь QR → Payment = 1:N: попыток может быть несколько, пока одна не закончится SUCCESS.
+    const first = createPaymentInState(seed, input())
+    const second = createPaymentInState(first.state, input({ idempotency_key: 'another-key' }))
+    expect(second.payment.payment_id).not.toBe(first.payment.payment_id)
+    const paid = confirmPaymentInState(second.state, first.payment.payment_id)
+    expect(paid.qr_links.find((qr) => qr.qr_id === 'qr_001')?.used).toBe(true)
+    expect(() => createPaymentInState(paid, input({ idempotency_key: 'third-key' }))).toThrowError(expect.objectContaining({ code: 'QR_USED' }))
   })
 
   it('ограничивает чаевые 50% и отклоняет подмену суммы чека', () => {
@@ -130,7 +135,7 @@ describe('QR: подпись, TTL, чек и границы', () => {
 describe('Отчётность, ИБ и аудит', () => {
   it('отчёт мерчанта учитывает увеличенные демонстрационные чаевые', () => {
     const report = merchantReport(createSeedState(), 'm_001', '2025-11-01', '2025-11-30')
-    expect(report).toEqual({ merchant_id: 'm_001', period: '2025-11', tips_total: 1031.25, payments_count: 6, avg_tip_pct: 23.54, success_rate: 0.833 })
+    expect(report).toEqual({ report_id: expect.stringMatching(/^rep_\d{4}$/), merchant_id: 'm_001', period: '2025-11', tips_total: 1031.25, payments_count: 6, avg_tip_pct: 23.54, success_rate: 0.833 })
   })
 
   it('отчёт официанта содержит только его платежи и средний чек 350 ₽', () => {
@@ -147,5 +152,38 @@ describe('Отчётность, ИБ и аудит', () => {
   it('событие аудита содержит все обязательные поля', () => {
     const event = createSeedState().audit[0]
     expect(Object.keys(event)).toEqual(['event_id', 'payment_id', 'qr_id', 'action', 'from_status', 'to_status', 'amount_total', 'actor', 'at'])
+  })
+})
+
+describe('Отзыв, суммы и диапазон отчёта', () => {
+  it('сохраняет отзыв только по успешному платежу', () => {
+    const seed = createSeedState()
+    const created = createPaymentInState(seed, input())
+    expect(() => submitReviewInState(created.state, created.payment.payment_id, 'Отличный сервис')).toThrowError(expect.objectContaining({ code: 'REVIEW_NOT_ALLOWED' }))
+    const paid = confirmPaymentInState(created.state, created.payment.payment_id)
+    const reviewed = submitReviewInState(paid, created.payment.payment_id, '  Отличный сервис  ')
+    expect(reviewed.payments.find((payment) => payment.payment_id === created.payment.payment_id)).toMatchObject({ review: 'Отличный сервис' })
+    expect(reviewed.payments.find((payment) => payment.payment_id === created.payment.payment_id)?.reviewed_at).toBeTruthy()
+    expect(() => submitReviewInState(reviewed, created.payment.payment_id, 'ок')).toThrowError(expect.objectContaining({ code: 'REVIEW_TOO_SHORT' }))
+  })
+
+  it('пишет в платёж amount_total и tip_amount по схеме API', () => {
+    const seed = createSeedState()
+    const created = createPaymentInState(seed, input({ tip_pct: 10 }))
+    expect(created.payment).toMatchObject({ amount: 637, tip: 63.7, tip_amount: 63.7, amount_total: 700.7 })
+  })
+
+  it('считает диапазон отчёта по фактическим платежам', () => {
+    const seed = createSeedState()
+    const range = paymentRange(seed.payments)
+    expect(range.from).toMatch(/^2025-11-0[1-4]$/)
+    expect(range.to).toMatch(/^2025-11-0[1-4]$/)
+    expect(paymentRange([]).from).toBe(paymentRange([]).to)
+  })
+
+  it('даёт детерминированный report_id формата rep_NNNN', () => {
+    expect(reportId('m_001', '2025-11')).toMatch(/^rep_\d{4}$/)
+    expect(reportId('m_001', '2025-11')).toBe(reportId('m_001', '2025-11'))
+    expect(reportId('m_001', '2025-11')).not.toBe(reportId('m_002', '2025-11'))
   })
 })

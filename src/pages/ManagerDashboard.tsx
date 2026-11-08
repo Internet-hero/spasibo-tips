@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { DashboardShell } from '@/components/DashboardShell'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { dailyReport, formatMoney, merchantReport, paymentTotal } from '@/lib/domain'
+import { dailyReport, formatMoney, merchantReport, paymentRange, paymentTotal } from '@/lib/domain'
 import { useDemoState } from '@/lib/store'
 
 export default function ManagerDashboard() {
@@ -14,8 +14,9 @@ export default function ManagerDashboard() {
   const location = useLocation()
   const merchantId = state.session?.merchant_id ?? 'm_001'
   const merchant = state.merchants.find((item) => item.merchant_id === merchantId)
-  const [from, setFrom] = useState('2025-11-01')
-  const [to, setTo] = useState('2025-11-30')
+  const defaultRange = useMemo(() => paymentRange(state.payments.filter((payment) => payment.merchant_id === merchantId)), [state.payments, merchantId])
+  const [from, setFrom] = useState(defaultRange.from)
+  const [to, setTo] = useState(defaultRange.to)
   const report = useMemo(() => merchantReport(state, merchantId, from, to), [state, merchantId, from, to])
   const daily = useMemo(() => dailyReport(state, merchantId, from, to), [state, merchantId, from, to])
   const notice = (location.state as { notice?: string } | null)?.notice
@@ -33,7 +34,7 @@ export default function ManagerDashboard() {
     toast.success('CSV-отчёт сформирован')
   }
   return (
-    <DashboardShell role="manager" title="Отчёт по чаевым" subtitle={`${merchant?.name ?? 'Заведение'} · ${merchantId}`}>
+    <DashboardShell role="manager" title="Отчёт по чаевым" subtitle={`${merchant?.name ?? 'Заведение'} · ${merchantId} · ${report.report_id}`}>
       {notice && <p role="status" className="mb-5 rounded-2xl bg-amber-100 p-4 text-sm font-semibold text-amber-900">{notice}</p>}
       {merchant?.status !== 'ACTIVE' && <div className="mb-5 flex items-start gap-3 rounded-2xl border bg-card p-4 text-sm"><ShieldAlert className="mt-0.5 size-5 text-accent" /><p>Текущий статус: <strong>{merchant?.status}</strong>. Генерация QR доступна только после активации администратором.</p></div>}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">

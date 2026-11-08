@@ -45,6 +45,10 @@ export interface Payment {
   idempotency_key?: string
   confirm_token?: string
   error_code?: string
+  amount_total?: number
+  tip_amount?: number
+  review?: string
+  reviewed_at?: string
 }
 
 export interface AuditEvent {
@@ -90,6 +94,7 @@ export interface QrGenerationInput {
 }
 
 export interface MerchantReport {
+  report_id: string
   merchant_id: string
   period: string
   tips_total: number
