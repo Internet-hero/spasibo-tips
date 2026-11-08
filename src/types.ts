@@ -1,89 +1,108 @@
 export type Role = 'staff' | 'manager' | 'admin'
-export type PaymentStatus = 'pending' | 'succeeded' | 'failed' | 'refunded'
-export type QrType = 'staff' | 'venue' | 'table'
+export type MerchantStatus = 'ACTIVE' | 'BLOCKED' | 'PENDING'
+export type PaymentStatus = 'CREATED' | 'PENDING' | 'SUCCESS' | 'DECLINED' | 'CANCELED'
+export type AuditAction = 'payment_created' | 'payment_pending' | 'payment_confirmed' | 'payment_declined' | 'payment_canceled'
 
-export interface Venue {
-  id: string
+export interface Merchant {
+  merchant_id: string
   name: string
-  type: string
-  address: string
-  splitPercent: number
-  active: boolean
+  status: MerchantStatus
+  description: string
 }
 
-export interface StaffGoal {
-  title: string
-  targetAmount: number
-  currentAmount: number
-  deadline: string
-  isActive: boolean
-}
-
-export interface StaffMember {
-  id: string
-  venueId: string
+export interface Employee {
+  employee_id: string
+  merchant_id: string
   name: string
-  position: string
-  avatar: string
+  payment_details: string
+  avatar?: string
+  position?: string
   active: boolean
-  inviteCode: string
-  goal: StaffGoal
+  invite_code?: string
 }
 
-export interface QrToken {
-  token: string
-  type: QrType
-  venueId: string
-  staffId?: string
-  tableLabel?: string
-  expectedGuests?: number
-  active: boolean
+export interface QrLink {
+  qr_id: string
+  merchant_id: string
+  employee_id: string
+  receipt_id: string
+  nonce: string
+  exp: string
+  signature: string
+  base_amount: number
+  used: boolean
 }
 
-export interface Tip {
-  id: string
-  publicId: string
-  qrToken: string
-  venueId: string
-  staffId: string
-  guestId: string
+export interface Payment {
+  payment_id: string
+  merchant_id: string
+  employee_id: string
+  qr_id: string
   amount: number
-  currency: 'RUB'
+  tip: number
   status: PaymentStatus
-  displayName: string
-  isAnonymous: boolean
-  message: string
-  showOnWall: boolean
-  isGoalTopup: boolean
-  idempotencyKey: string
-  createdAt: string
-  paidAt?: string
+  timestamp: string
+  idempotency_key?: string
+  confirm_token?: string
+  error_code?: string
+}
+
+export interface AuditEvent {
+  event_id: string
+  payment_id: string
+  qr_id: string
+  action: AuditAction
+  from_status: PaymentStatus | null
+  to_status: PaymentStatus
+  amount_total: number
+  actor: 'system' | 'client' | 'officer'
+  at: string
 }
 
 export interface Session {
   role: Role
-  venueId?: string
-  staffId?: string
+  merchant_id?: string
+  employee_id?: string
 }
 
 export interface DemoState {
-  version: number
-  venues: Venue[]
-  staff: StaffMember[]
-  qrTokens: QrToken[]
-  tips: Tip[]
+  version: 2
+  merchants: Merchant[]
+  employees: Employee[]
+  payments: Payment[]
+  qr_links: QrLink[]
+  audit: AuditEvent[]
   session: Session | null
 }
 
 export interface PaymentInput {
-  qrToken: string
-  staffId?: string
-  amount: number
-  displayName: string
-  isAnonymous: boolean
-  message: string
-  showOnWall: boolean
-  isGoalTopup: boolean
-  idempotencyKey: string
-  guestId: string
+  qr_id: string
+  receipt_id: string
+  base_amount: number
+  tip_pct: number
+  idempotency_key: string
+}
+
+export interface QrGenerationInput {
+  employee_id: string
+  receipt_id: string
+  base_amount: number
+}
+
+export interface MerchantReport {
+  merchant_id: string
+  period: string
+  tips_total: number
+  payments_count: number
+  avg_tip_pct: number
+  success_rate: number
+}
+
+export interface EmployeeReport {
+  employee_id: string
+  period: string
+  tips_total: number
+  payments_count: number
+  avg_tip_amount: number
+  top_day: string
 }

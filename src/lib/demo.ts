@@ -1,103 +1,88 @@
-import type { DemoState, StaffMember, Tip } from '@/types'
+import Papa from 'papaparse'
+import merchantsCsv from '@/data/merchants.csv?raw'
+import employeesCsv from '@/data/employees.csv?raw'
+import paymentsCsv from '@/data/payments.csv?raw'
+import qrLinksCsv from '@/data/qr_links.csv?raw'
+import { signQrPayload } from '@/lib/qr'
+import type { AuditAction, AuditEvent, DemoState, Employee, Merchant, Payment, PaymentStatus, QrLink } from '@/types'
 
-const minutesAgo = (minutes: number) => {
-  const now = Date.now()
-  const start = new Date()
-  start.setHours(0, 5, 0, 0)
-  return new Date(Math.max(start.getTime(), now - minutes * 60_000)).toISOString()
+type MerchantRow = Omit<Merchant, never>
+type EmployeeRow = Pick<Employee, 'employee_id' | 'merchant_id' | 'name' | 'payment_details'>
+type PaymentRow = Omit<Payment, 'qr_id'>
+type QrRow = Omit<QrLink, 'base_amount' | 'used'>
+
+function rows<T>(csv: string) {
+  return Papa.parse<T>(csv, { header: true, skipEmptyLines: true }).data
 }
 
-const daysAgo = (days: number, hour = 14) => {
-  const date = new Date()
-  date.setDate(date.getDate() - days)
-  date.setHours(hour, 20, 0, 0)
-  return date.toISOString()
+const merchants = rows<MerchantRow>(merchantsCsv)
+const employeeRows = rows<EmployeeRow>(employeesCsv)
+const paymentRows = rows<PaymentRow>(paymentsCsv)
+const qrRows = rows<QrRow>(qrLinksCsv)
+
+const featured: Record<string, Pick<Employee, 'name' | 'avatar' | 'position' | 'invite_code'>> = {
+  e_001: { name: 'Вероника', avatar: '/avatars/veronika.jpg', position: 'Бариста', invite_code: 'ANNA2026' },
+  e_002: { name: 'Дмитрий', avatar: '/avatars/dmitry.jpg', position: 'Официант', invite_code: 'MIKHAIL2026' },
+  e_003: { name: 'Антон', avatar: '/avatars/anton.jpg', position: 'Официант', invite_code: 'SOFIA2026' },
 }
 
-const staff: StaffMember[] = [
-  {
-    id: 'staff-anna', venueId: 'venue-coffee', name: 'Анна', position: 'Бариста',
-    avatar: '/avatars/anna.jpg', active: true, inviteCode: 'ANNA2026',
-    goal: { title: 'Новая кофемолка', targetAmount: 500_000, currentAmount: 485_000, deadline: '2026-11-14', isActive: true },
-  },
-  {
-    id: 'staff-mikhail', venueId: 'venue-coffee', name: 'Михаил', position: 'Официант',
-    avatar: '/avatars/mikhail.jpg', active: true, inviteCode: 'MIKHAIL2026',
-    goal: { title: 'Ужин с семьёй', targetAmount: 300_000, currentAmount: 105_000, deadline: '2026-11-10', isActive: true },
-  },
-  {
-    id: 'staff-sofia', venueId: 'venue-coffee', name: 'София', position: 'Кондитер',
-    avatar: '/avatars/sofia.jpg', active: true, inviteCode: 'SOFIA2026',
-    goal: { title: 'Курс по десертам', targetAmount: 400_000, currentAmount: 100_000, deadline: '2026-11-20', isActive: true },
-  },
-]
+function historicalAudit(payment: Payment, index: number): AuditEvent {
+  const actions: Record<PaymentStatus, AuditAction> = {
+    CREATED: 'payment_created',
+    PENDING: 'payment_pending',
+    SUCCESS: 'payment_confirmed',
+    DECLINED: 'payment_declined',
+    CANCELED: 'payment_canceled',
+  }
+  const fromStatus: Record<PaymentStatus, PaymentStatus | null> = {
+    CREATED: null,
+    PENDING: 'CREATED',
+    SUCCESS: 'PENDING',
+    DECLINED: 'PENDING',
+    CANCELED: 'CREATED',
+  }
+  return {
+    event_id: `evt_${String(index + 1).padStart(4, '0')}`,
+    payment_id: payment.payment_id,
+    qr_id: payment.qr_id,
+    action: actions[payment.status],
+    from_status: fromStatus[payment.status],
+    to_status: payment.status,
+    amount_total: Math.round((payment.amount + payment.tip) * 100) / 100,
+    actor: payment.status === 'CANCELED' ? 'client' : 'system',
+    at: payment.timestamp,
+  }
+}
 
-const tip = (
-  id: string,
-  staffId: string,
-  amount: number,
-  createdAt: string,
-  options: Partial<Tip> = {},
-): Tip => ({
-  id: `tip-${id}`,
-  publicId: `pay-${id}`,
-  qrToken: options.qrToken ?? staffId.replace('staff-', ''),
-  venueId: 'venue-coffee',
-  staffId,
-  guestId: options.guestId ?? `guest-${id}`,
-  amount: amount * 100,
-  currency: 'RUB',
-  status: 'succeeded',
-  displayName: options.displayName ?? 'Гость',
-  isAnonymous: options.isAnonymous ?? false,
-  message: options.message ?? '',
-  showOnWall: options.showOnWall ?? false,
-  isGoalTopup: options.isGoalTopup ?? false,
-  idempotencyKey: `seed-${id}`,
-  createdAt,
-  paidAt: createdAt,
-  ...options,
-})
-
-const tips: Tip[] = [
-  tip('01', 'staff-anna', 500, minutesAgo(18), { qrToken: 'table7', guestId: 'table-guest-1', displayName: 'Мария', message: 'Раф — как маленький праздник. Спасибо!', showOnWall: true }),
-  tip('02', 'staff-anna', 300, minutesAgo(42), { qrToken: 'table7', guestId: 'table-guest-2', displayName: 'Илья', message: 'Очень тёплый сервис и вкусный кофе.', showOnWall: true }),
-  tip('03', 'staff-anna', 450, minutesAgo(68), { qrToken: 'table7', guestId: 'table-guest-3', isAnonymous: true, displayName: '', message: 'Спасибо, что начинаете наше утро с улыбки.', showOnWall: true }),
-  tip('04', 'staff-anna', 300, minutesAgo(96), { displayName: 'Ольга', message: 'Лучший флэт уайт в городе!', showOnWall: true }),
-  tip('05', 'staff-anna', 2200, minutesAgo(125), { displayName: 'Алексей', message: 'Спасибо за заботу и идеальный эспрессо.', showOnWall: true }),
-  tip('06', 'staff-anna', 1100, minutesAgo(154), { isAnonymous: true, displayName: '', message: 'Пусть новая кофемолка скорее появится!', showOnWall: true }),
-  tip('07', 'staff-mikhail', 700, minutesAgo(35), { displayName: 'Дмитрий', message: 'Спасибо за рекомендацию десерта — попали в точку.', showOnWall: true }),
-  tip('08', 'staff-mikhail', 350, minutesAgo(90), { isAnonymous: true, displayName: '', message: 'Всё было очень душевно.', showOnWall: true }),
-  tip('09', 'staff-sofia', 400, minutesAgo(52), { displayName: 'Ева', message: 'Эклеры невероятные. Вы волшебница!', showOnWall: true }),
-  tip('10', 'staff-sofia', 600, minutesAgo(140), { displayName: 'Никита', message: 'Спасибо за праздничный торт, всем очень понравился.', showOnWall: true }),
-  tip('11', 'staff-anna', 700, daysAgo(1), { displayName: 'Вера', message: 'С вами даже понедельник добрый.', showOnWall: true }),
-  tip('12', 'staff-mikhail', 500, daysAgo(2), { displayName: 'Григорий', message: 'Отличный вечер, спасибо!', showOnWall: true }),
-  tip('13', 'staff-sofia', 850, daysAgo(3), { isAnonymous: true, displayName: '', message: 'Десерты, которые хочется запомнить.', showOnWall: true }),
-  tip('14', 'staff-anna', 200, daysAgo(4), { displayName: 'Лев', message: 'Быстро, вкусно, с улыбкой.' }),
-  tip('15', 'staff-anna', 300, daysAgo(5), { status: 'refunded', displayName: 'Гость' }),
-  tip('16', 'staff-mikhail', 400, daysAgo(1), { status: 'failed', paidAt: undefined, displayName: 'Гость' }),
-]
-
-export const createSeedState = (): DemoState => ({
-  version: 1,
-  venues: [
-    { id: 'venue-coffee', name: 'Просто кофе', type: 'Кафе', address: 'Москва, Никольская, 10', splitPercent: 0, active: true },
-    { id: 'venue-north', name: 'Север', type: 'Ресторан', address: 'Санкт-Петербург, Рубинштейна, 18', splitPercent: 0, active: true },
-  ],
-  staff,
-  qrTokens: [
-    { token: 'anna', type: 'staff', venueId: 'venue-coffee', staffId: 'staff-anna', active: true },
-    { token: 'mikhail', type: 'staff', venueId: 'venue-coffee', staffId: 'staff-mikhail', active: true },
-    { token: 'sofia', type: 'staff', venueId: 'venue-coffee', staffId: 'staff-sofia', active: true },
-    { token: 'coffee', type: 'venue', venueId: 'venue-coffee', active: true },
-    { token: 'table7', type: 'table', venueId: 'venue-coffee', tableLabel: 'Стол 7', expectedGuests: 5, active: true },
-  ],
-  tips,
-  session: null,
-})
-
-export const DEMO_ACCOUNTS = {
-  staff: { email: 'anna@spasibo.demo', password: 'demo' },
-  manager: { email: 'manager@spasibo.demo', password: 'demo' },
-  admin: { email: 'admin@spasibo.demo', password: 'demo' },
+export const createSeedState = (): DemoState => {
+  const payments: Payment[] = paymentRows.map((row, index) => ({
+    ...row,
+    amount: Number(row.amount),
+    tip: Number(row.tip),
+    qr_id: `qr_${String(index + 1).padStart(3, '0')}`,
+  }))
+  const freshExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  const qrLinks: QrLink[] = qrRows.map((row, index) => {
+    const qr = {
+      ...row,
+      exp: index < 3 ? freshExpiry : row.exp,
+      base_amount: payments[index]?.amount ?? 1000,
+      used: false,
+    }
+    return { ...qr, signature: index < 3 ? signQrPayload(qr) : row.signature }
+  })
+  return {
+    version: 2,
+    merchants: merchants.map((merchant) => ({ ...merchant })),
+    employees: employeeRows.map((employee) => ({
+      ...employee,
+      ...featured[employee.employee_id],
+      position: featured[employee.employee_id]?.position ?? 'Официант',
+      active: true,
+    })),
+    payments,
+    qr_links: qrLinks,
+    audit: payments.map(historicalAudit),
+    session: null,
+  }
 }

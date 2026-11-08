@@ -1,44 +1,49 @@
 import { Link, useParams } from 'react-router'
-import { ArrowRight, Check, Heart, RotateCcw, X } from 'lucide-react'
+import { ArrowRight, Check, Clock3, Home, RotateCcw, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { StaffAvatar } from '@/components/StaffAvatar'
+import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { displayGuestName, formatMoney, tableProgress } from '@/lib/domain'
-import { useDemoState } from '@/lib/store'
+import { formatMoney, paymentTotal } from '@/lib/domain'
+import { demoActions, useDemoState } from '@/lib/store'
 
 export default function PaymentStatus() {
   const { paymentId = '' } = useParams()
   const state = useDemoState()
-  const payment = state.tips.find((tip) => tip.publicId === paymentId)
-  const member = state.staff.find((item) => item.id === payment?.staffId)
-  const token = state.qrTokens.find((item) => item.token === payment?.qrToken)
-  if (!payment || !member) return (
-    <div className="grid min-h-[100dvh] place-items-center p-5 text-center"><div><h1 className="display-font text-2xl">Платёж не найден</h1><Button asChild className="mt-5 rounded-full"><Link to="/">На главную</Link></Button></div></div>
-  )
-  const success = payment.status === 'succeeded'
-  const pending = payment.status === 'pending'
-  const progress = token?.type === 'table' ? tableProgress(state, token.token) : null
-  const againUrl = `/p/${payment.qrToken}${token?.type === 'staff' ? '' : `?staff=${member.id}`}`
+  const payment = state.payments.find((item) => item.payment_id === paymentId)
+  const employee = state.employees.find((item) => item.employee_id === payment?.employee_id)
+  if (!payment || !employee) return <div className="grid min-h-[100dvh] place-items-center p-5 text-center"><div><h1 className="display-font text-2xl">Платёж не найден</h1><Button asChild className="mt-5 rounded-full"><Link to="/">На главную</Link></Button></div></div>
+  const success = payment.status === 'SUCCESS'
+  const pending = payment.status === 'PENDING'
+  const declined = payment.status === 'DECLINED'
+  const canceled = payment.status === 'CANCELED'
+  const title = success ? 'Спасибо! Чаевые отправлены' : pending ? 'Обрабатываем, проверьте через минуту' : declined ? 'Оплата не прошла, попробуйте другой способ' : canceled ? 'Платёж отменён' : 'Платёж создан'
+  const description = success ? `${employee.name} получит чаевые после демонстрационного подтверждения шлюза.` : pending ? 'Эмулятор вернул TIMEOUT. Платёж остаётся в PENDING, отмена на этом этапе запрещена.' : declined ? 'Шлюз отклонил операцию. Деньги не списаны.' : canceled ? 'Платёж отменён до подтверждения, списания не было.' : 'Платёж ожидает подтверждения клиентом.'
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-background pb-[env(safe-area-inset-bottom)]">
       <header className="page-container py-3"><Logo /></header>
       <main className="page-container grid max-w-xl place-items-center py-6 sm:py-12">
-        <section className="success-pop surface relative w-full overflow-hidden p-6 text-center sm:p-10" aria-live="polite">
-          <div className="absolute left-6 top-8 size-3 rounded-full bg-accent/60" aria-hidden="true" /><div className="absolute right-10 top-16 size-2 rounded-full bg-primary/40" aria-hidden="true" /><div className="absolute bottom-24 left-10 size-2 rounded-full bg-accent/40" aria-hidden="true" />
+        <section className="surface w-full p-6 text-center sm:p-10" aria-live="polite">
           <span className={`mx-auto grid size-20 place-items-center rounded-full ${success ? 'bg-primary text-primary-foreground' : pending ? 'bg-amber-100 text-amber-900' : 'bg-red-100 text-red-800'}`}>
-            {success ? <Check className="size-10" strokeWidth={2.5} /> : pending ? <span className="size-8 animate-spin rounded-full border-4 border-amber-800/20 border-t-amber-800" /> : <X className="size-10" />}
+            {success ? <Check className="size-10" /> : pending ? <Clock3 className="size-10" /> : <X className="size-10" />}
           </span>
-          <p className="mt-6 text-sm font-bold text-muted-foreground">{formatMoney(payment.amount)} · {displayGuestName(payment)}</p>
-          <h1 className="display-font mt-2 text-2xl font-semibold leading-tight sm:text-3xl">{success ? 'Спасибо уже в пути' : pending ? 'Подтверждаем оплату' : 'Оплата не прошла'}</h1>
-          <p className="mx-auto mt-3 max-w-sm text-muted-foreground">{success ? `${member.name} уже видит ваше спасибо${payment.message ? ' и тёплые слова' : ''}.` : pending ? 'Обычно это занимает несколько секунд. Обновите страницу через мгновение.' : 'Деньги не списаны. Проверьте данные карты или попробуйте ещё раз.'}</p>
-          {success && <div className="my-6 flex items-center justify-center gap-3"><StaffAvatar member={member} size="md" /><div className="text-left"><p className="font-extrabold">{member.name}</p><p className="text-sm text-muted-foreground">{member.position}</p></div></div>}
-          {success && progress && <div className="mb-5 rounded-2xl bg-secondary/65 p-4 text-sm font-bold text-primary">Вы {progress.tipped}-й из {progress.expected} за этим столом{progress.expected - progress.tipped === 1 ? ' — стол почти собрался!' : ' — спасибо, что присоединились!'}</div>}
-          {success && payment.isGoalTopup && <div className="mb-5 rounded-2xl border border-accent/30 bg-accent/10 p-4 text-sm font-bold"><Heart className="mr-2 inline size-5 text-accent" />Вы помогли закрыть цель «{member.goal.title}»</div>}
+          <div className="mt-5 flex justify-center"><StatusBadge status={payment.status} /></div>
+          <h1 className="display-font mt-4 text-2xl font-semibold leading-tight sm:text-3xl">{title}</h1>
+          <p className="mx-auto mt-3 max-w-sm text-muted-foreground">{description}</p>
+          {payment.error_code && <p className="mt-3 font-mono text-xs font-bold text-red-800">{payment.error_code}</p>}
+          <dl className="my-6 space-y-3 rounded-2xl bg-muted p-5 text-left">
+            <div className="flex justify-between gap-4 text-sm"><dt>Чек</dt><dd className="font-bold">{formatMoney(payment.amount)}</dd></div>
+            <div className="flex justify-between gap-4 text-sm"><dt>Чаевые</dt><dd className="font-bold">{formatMoney(payment.tip)}</dd></div>
+            <div className="soft-divider" />
+            <div className="flex justify-between gap-4"><dt>Итого</dt><dd className="font-extrabold">{formatMoney(paymentTotal(payment))}</dd></div>
+          </dl>
+          {success && <div className="mb-6 flex items-center justify-center gap-3"><StaffAvatar member={employee} size="md" /><div className="text-left"><p className="font-extrabold">{employee.name}</p><p className="text-sm text-muted-foreground">{employee.position}</p></div></div>}
           <div className="grid gap-3">
-            {success ? <Button asChild size="lg" className="rounded-2xl bg-accent text-accent-foreground"><Link to={againUrl}>Оставить ещё<ArrowRight /></Link></Button> : <Button asChild size="lg" className="rounded-2xl"><Link to={againUrl}><RotateCcw />Попробовать снова</Link></Button>}
-            {success && payment.showOnWall && <Button asChild variant="outline" className="rounded-2xl"><Link to={`/wall/${payment.venueId}`}>Посмотреть на стене</Link></Button>}
-            {!success && <Button asChild variant="ghost" className="rounded-2xl"><Link to="/">Вернуться на главную</Link></Button>}
+            {pending && <Button size="lg" className="rounded-2xl" onClick={() => window.location.reload()}><RotateCcw />Проверить статус</Button>}
+            {payment.status === 'CREATED' && <Button size="lg" variant="outline" className="rounded-2xl" onClick={() => demoActions.cancelPayment(payment.payment_id)}>Отменить платёж</Button>}
+            <Button asChild size="lg" variant={success || pending ? 'outline' : 'default'} className="rounded-2xl"><Link to="/"><Home />На главную</Link></Button>
           </div>
+          <p className="mt-5 break-all font-mono text-xs text-muted-foreground">{payment.payment_id} · {payment.qr_id}<ArrowRight className="ml-1 inline size-3" />{payment.status}</p>
         </section>
       </main>
     </div>

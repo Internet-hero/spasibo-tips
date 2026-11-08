@@ -1,8 +1,9 @@
 # Источники демо-ресурсов
 
-- Фотографии сотрудников: Random User Generator, https://randomuser.me — локальные демо-аватары `public/avatars/anna.jpg`, `mikhail.jpg`, `sofia.jpg`. Используются только как вымышленные персонажи демонстрации.
+- Фотографии Вероники, Дмитрия и Антона: предоставленное пользователем групповое фото; локальные кадры `public/avatars/veronika.jpg`, `dmitry.jpg`, `anton.jpg`.
+- Данные мерчантов, сотрудников, платежей и QR: CSV из приложенного пользователем ТЗ, без изменений.
 - Иконки: Lucide, ISC License, https://lucide.dev.
 - Шрифты: Manrope и Unbounded через Fontsource, SIL Open Font License 1.1.
 - QR-коды: npm-пакет `qrcode`, MIT License.
-
-Фотографии не изображают реальных сотрудников вымышленного заведения «Просто кофе».
+- HMAC и hash: `@noble/hashes`, MIT License.
+- CSV: `papaparse`, MIT License.

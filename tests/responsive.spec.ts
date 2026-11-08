@@ -1,13 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
-import { route } from './routes'
+import { loginAs, route } from './routes'
 
-const publicRoutes = [
-  ['home', '/'],
-  ['select', '/p/table7/select'],
-  ['payment', '/p/anna'],
-  ['wall', '/wall/venue-coffee'],
-] as const
+const publicRoutes = [['home', '/'], ['payment', '/p/qr_001'], ['login', '/login']] as const
 
 for (const width of [375, 768, 1024, 1440]) {
   test(`публичные страницы без горизонтального скролла: ${width}px`, async ({ page }) => {
@@ -27,22 +22,17 @@ test('кабинеты без горизонтального скролла на
   await mkdir('.verification', { recursive: true })
   for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: width === 375 ? 812 : 900 })
-    await page.goto(route('/'))
-    await page.getByRole('button', { name: /Сотрудник Смена, цель/ }).click()
-    await expect(page.getByRole('heading', { name: 'Добрый день, Анна' })).toBeVisible()
+    await loginAs(page, 'staff')
     await page.screenshot({ path: `.verification/staff-${width}.png`, fullPage: true })
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
-    await page.goto(route('/'))
-    await page.getByRole('button', { name: /Управляющий Команда, аналитика/ }).click()
+    await loginAs(page, 'manager')
     for (const [name, path] of [['manager', '/manager'], ['manager-staff', '/manager/staff'], ['manager-qr', '/manager/qr']] as const) {
       await page.goto(route(path))
       await expect(page.locator('main')).toBeVisible()
       await page.screenshot({ path: `.verification/${name}-${width}.png`, fullPage: true })
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     }
-    await page.goto(route('/'))
-    await page.getByRole('button', { name: /Администратор Заведения/ }).click()
-    await expect(page.getByRole('heading', { name: 'Платформа' })).toBeVisible()
+    await loginAs(page, 'admin')
     await page.screenshot({ path: `.verification/admin-${width}.png`, fullPage: true })
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
   }

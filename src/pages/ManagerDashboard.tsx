@@ -1,65 +1,59 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
-import { ArrowRight, Download, HeartHandshake, Percent, ReceiptText, TrendingUp, Users, Wallet } from 'lucide-react'
+import { Link, useLocation } from 'react-router'
+import { ArrowRight, Download, Percent, ReceiptText, ShieldAlert, TrendingUp, Wallet } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
 import { DashboardShell } from '@/components/DashboardShell'
-import { StaffAvatar } from '@/components/StaffAvatar'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { displayGuestName, formatMoney, venueStats } from '@/lib/domain'
+import { dailyReport, formatMoney, merchantReport, paymentTotal } from '@/lib/domain'
 import { useDemoState } from '@/lib/store'
 
 export default function ManagerDashboard() {
   const state = useDemoState()
-  const venueId = state.session?.venueId ?? 'venue-coffee'
-  const venue = state.venues.find((item) => item.id === venueId)
-  const [period, setPeriod] = useState<7 | 30>(7)
-  const stats = useMemo(() => venueStats(state, venueId, period), [state, venueId, period])
-  const latest = state.tips.filter((tip) => tip.venueId === venueId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6)
+  const location = useLocation()
+  const merchantId = state.session?.merchant_id ?? 'm_001'
+  const merchant = state.merchants.find((item) => item.merchant_id === merchantId)
+  const [from, setFrom] = useState('2025-11-01')
+  const [to, setTo] = useState('2025-11-30')
+  const report = useMemo(() => merchantReport(state, merchantId, from, to), [state, merchantId, from, to])
+  const daily = useMemo(() => dailyReport(state, merchantId, from, to), [state, merchantId, from, to])
+  const notice = (location.state as { notice?: string } | null)?.notice
+  const payments = state.payments.filter((payment) => payment.merchant_id === merchantId && payment.timestamp.slice(0, 10) >= from && payment.timestamp.slice(0, 10) <= to).sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+  const latest = payments.slice(0, 8)
   const exportCsv = () => {
-    const rows = [['Дата', 'Сотрудник', 'Сумма ₽', 'Гость', 'Статус', 'Послание', 'Добил цель'], ...state.tips.filter((tip) => tip.venueId === venueId).map((tip) => [
-      new Date(tip.createdAt).toLocaleString('ru-RU'),
-      state.staff.find((member) => member.id === tip.staffId)?.name ?? '—',
-      (tip.amount / 100).toString(), displayGuestName(tip), tip.status, tip.message, tip.isGoalTopup ? 'да' : 'нет',
-    ])]
-    const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(';')).join('\n')}`
+    const rows = [['payment_id', 'merchant_id', 'employee_id', 'amount', 'tip', 'status', 'timestamp'], ...payments.map((payment) => [payment.payment_id, payment.merchant_id, payment.employee_id, payment.amount.toFixed(2), payment.tip.toFixed(2), payment.status, payment.timestamp])]
+    const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\n')}`
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `spasibo-${venueId}.csv`; anchor.click(); URL.revokeObjectURL(url)
-    toast.success('CSV-выгрузка готова')
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `tips-${merchantId}-${from}-${to}.csv`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    toast.success('CSV-отчёт сформирован')
   }
   return (
-    <DashboardShell role="manager" title="Пульс заведения" subtitle={`${venue?.name ?? 'Заведение'} · аналитика благодарностей`}>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded-2xl bg-muted p-1" aria-label="Период статистики">{([7, 30] as const).map((days) => <button key={days} onClick={() => setPeriod(days)} aria-pressed={period === days} className={`min-h-11 rounded-xl px-5 text-sm font-bold transition ${period === days ? 'bg-card shadow-sm' : 'text-muted-foreground'}`}>{days} дней</button>)}</div>
-        <div className="flex gap-2"><Button variant="outline" onClick={exportCsv}><Download />CSV</Button><Button asChild className="rounded-xl"><Link to="/manager/qr">QR-коды<ArrowRight /></Link></Button></div>
+    <DashboardShell role="manager" title="Отчёт по чаевым" subtitle={`${merchant?.name ?? 'Заведение'} · ${merchantId}`}>
+      {notice && <p role="status" className="mb-5 rounded-2xl bg-amber-100 p-4 text-sm font-semibold text-amber-900">{notice}</p>}
+      {merchant?.status !== 'ACTIVE' && <div className="mb-5 flex items-start gap-3 rounded-2xl border bg-card p-4 text-sm"><ShieldAlert className="mt-0.5 size-5 text-accent" /><p>Текущий статус: <strong>{merchant?.status}</strong>. Генерация QR доступна только после активации администратором.</p></div>}
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row"><label className="text-xs font-bold">С<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="field-input mt-1" /></label><label className="text-xs font-bold">По<input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="field-input mt-1" /></label></div>
+        <div className="flex gap-2"><Button variant="outline" onClick={exportCsv}><Download />CSV</Button><Button asChild className="rounded-xl"><Link to="/manager/qr">QR на чек<ArrowRight /></Link></Button></div>
       </div>
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ключевые показатели">
-        <Stat title="Сумма чаевых" value={formatMoney(stats.total)} note={`За ${period} дней`} icon={Wallet} featured />
-        <Stat title="Платежей" value={String(stats.count)} note={`${stats.topups} добили цель`} icon={ReceiptText} />
-        <Stat title="Средний чек" value={formatMoney(stats.average)} note="По успешным платежам" icon={TrendingUp} />
-        <Stat title="Анонимных" value={`${stats.anonymousPercent}%`} note="Без имени и контактов" icon={Percent} />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Отчёт мерчанта">
+        <Stat title="Сумма чаевых" value={formatMoney(report.tips_total)} note="По SUCCESS" icon={Wallet} featured />
+        <Stat title="Платежей" value={String(report.payments_count)} note="Все статусы за период" icon={ReceiptText} />
+        <Stat title="Средний %" value={`${report.avg_tip_pct.toFixed(2)}%`} note="Среднее tip / amount" icon={TrendingUp} />
+        <Stat title="Успешных" value={`${Math.round(report.success_rate * 100)}%`} note="SUCCESS / все платежи" icon={Percent} />
       </section>
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_.8fr]">
-        <section className="surface min-w-0 p-4 sm:p-6">
-          <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-extrabold">Динамика по дням</h2><p className="text-sm text-muted-foreground">Сумма успешных чаевых, ₽</p></div><span className="tag"><TrendingUp className="size-4" />{period} дней</span></div>
-          <div className="mt-6 h-64 w-full" aria-label="График чаевых по дням">
-            <ResponsiveContainer width="100%" height="100%"><BarChart data={stats.chart} margin={{ top: 4, right: 0, left: -22, bottom: 0 }}><CartesianGrid vertical={false} stroke="#dce5dc" strokeDasharray="3 3" /><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#52675f', fontSize: 12, fontFamily: 'Manrope' }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#52675f', fontSize: 12, fontFamily: 'Manrope' }} /><Tooltip cursor={{ fill: '#eef3ec' }} contentStyle={{ borderRadius: 16, border: '1px solid #d2ded3', fontFamily: 'Manrope' }} formatter={(value) => [`${value} ₽`, 'Чаевые']} /><Bar dataKey="amount" fill="#ee8666" radius={[7, 7, 2, 2]} isAnimationActive={false} /></BarChart></ResponsiveContainer>
-          </div>
-        </section>
-        <section className="surface p-5 sm:p-6">
-          <div className="flex items-center justify-between"><div><h2 className="text-lg font-extrabold">Топ команды</h2><p className="text-sm text-muted-foreground">По сумме за период</p></div><Users className="size-5 text-accent" /></div>
-          <div className="mt-5 space-y-4">
-            {stats.top.map((member, index) => <div key={member.id} className="flex items-center gap-3"><span className="w-4 text-sm font-extrabold text-muted-foreground">{index + 1}</span><StaffAvatar member={member} size="sm" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{member.name}</p><p className="text-xs text-muted-foreground">{member.count} платежей</p></div><p className="text-sm font-extrabold">{formatMoney(member.total)}</p></div>)}
-            {stats.top.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Добавьте сотрудников, чтобы увидеть рейтинг.</p>}
-          </div>
-          <Button asChild variant="outline" className="mt-6 w-full rounded-xl"><Link to="/manager/staff">Управлять командой<ArrowRight /></Link></Button>
-        </section>
-      </div>
+      <section className="surface mt-6 min-w-0 p-4 sm:p-6">
+        <div><h2 className="text-lg font-extrabold">Отчёт по дням</h2><p className="text-sm text-muted-foreground">Сумма чаевых SUCCESS, ₽</p></div>
+        <div className="mt-6 h-64 w-full" aria-label="График чаевых по дням"><ResponsiveContainer width="100%" height="100%"><BarChart data={daily} margin={{ top: 4, right: 0, left: -22, bottom: 0 }}><CartesianGrid vertical={false} stroke="#dce5dc" strokeDasharray="3 3" /><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#52675f', fontSize: 10 }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#52675f', fontSize: 12 }} /><Tooltip cursor={{ fill: '#eef3ec' }} formatter={(value) => [`${value} ₽`, 'Чаевые']} /><Bar dataKey="tips_total" fill="#ee8666" radius={[7, 7, 2, 2]} isAnimationActive={false} /></BarChart></ResponsiveContainer></div>
+      </section>
       <section className="surface mt-6 overflow-hidden">
-        <div className="flex items-center justify-between gap-4 p-5 sm:p-6"><div><h2 className="text-lg font-extrabold">Последние платежи</h2><p className="text-sm text-muted-foreground">Все статусы мок-кассы</p></div><HeartHandshake className="size-6 text-accent" /></div>
-        <div className="overflow-x-auto"><table className="admin-table min-w-[680px]"><thead><tr><th>Дата</th><th>Получатель</th><th>Гость</th><th>Сумма</th><th>Статус</th></tr></thead><tbody>{latest.map((tip) => <tr key={tip.id}><td>{new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(tip.createdAt))}</td><td className="font-bold">{state.staff.find((member) => member.id === tip.staffId)?.name ?? '—'}</td><td>{displayGuestName(tip)}</td><td className="font-extrabold">{formatMoney(tip.amount)}</td><td><StatusBadge status={tip.status} /></td></tr>)}</tbody></table></div>
-        {latest.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Платежи появятся после первого гостя.</p>}
+        <div className="p-5 sm:p-6"><h2 className="text-lg font-extrabold">Платежи за период</h2><p className="text-sm text-muted-foreground">Полный журнал мерчанта со статусами</p></div>
+        <div className="overflow-x-auto"><table className="admin-table min-w-[760px]"><thead><tr><th>Дата</th><th>Платёж</th><th>Сотрудник</th><th>Чаевые</th><th>Итого</th><th>Статус</th></tr></thead><tbody>{latest.map((payment) => <tr key={payment.payment_id}><td>{new Date(payment.timestamp).toLocaleString('ru-RU')}</td><td className="font-bold">{payment.payment_id}</td><td>{state.employees.find((employee) => employee.employee_id === payment.employee_id)?.name ?? payment.employee_id}</td><td className="font-extrabold">{formatMoney(payment.tip)}</td><td>{formatMoney(paymentTotal(payment))}</td><td><StatusBadge status={payment.status} /></td></tr>)}</tbody></table></div>
+        {latest.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">За выбранный период платежей нет.</p>}
       </section>
     </DashboardShell>
   )
