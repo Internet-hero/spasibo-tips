@@ -47,3 +47,18 @@ npm run test:e2e
 ## Стек
 
 React, TypeScript, Vite, Tailwind CSS, Radix UI, Recharts, qrcode, Noble Hashes, Papa Parse, Vitest, Playwright. Источники ресурсов — `CREDITS.md`.
+
+## Соответствие API из ТЗ
+
+Бэкенда в демо нет, но операции названы и разделены так же, как в `case_3_tips/05_api_schemas.yaml`:
+
+| Endpoint из ТЗ | В демо |
+|---|---|
+| `GET /api/v1/qr/{qr_id}` | экран `/p/:qrId` и `/pay?qr=…`, проверка в `validateQr` |
+| `POST /api/v1/tips` | `demoActions.createPayment` (идемпотентность по `idempotency_key`) |
+| `POST /api/v1/payments/{id}/confirm` | `demoActions.confirmPayment` → `PENDING` и результат эмулятора |
+| `POST /api/v1/payments/{id}/cancel` | `demoActions.cancelPayment` (только из `CREATED`) |
+| `GET /api/v1/reports/tips` | `merchantReport` / `employeeReport` и экран `/#/manager` с `report_id` |
+
+Коды ошибок и HTTP-статусы совпадают с таблицей из приложения (`INVALID_QR` 422, `QR_EXPIRED` 410,
+`QR_USED` 409, `MERCHANT_BLOCKED` 403, `CANCEL_NOT_ALLOWED` 409, `RATE_LIMITED` 429).
