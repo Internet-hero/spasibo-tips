@@ -55,6 +55,10 @@
 | `tip` | decimal | — | да | `>= 0`, `<= amount × 0.5` |
 | `status` | enum | — | да | `CREATED/PENDING/SUCCESS/DECLINED/CANCELED` |
 | `timestamp` | datetime | — | да | ISO 8601 |
+| `amount_total` | decimal | — | да | `amount + tip`, `<= 2 000 000` |
+| `tip_amount` | decimal | — | да | дубль `tip` для контракта API |
+| `review` | text | — | нет | отзыв клиента, до 500 символов, только для `SUCCESS` |
+| `reviewed_at` | datetime | — | нет | время отзыва |
 
 ### 2.5. Report
 
