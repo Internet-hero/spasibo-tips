@@ -51,8 +51,11 @@ test('главная заменяет чаевые больше 50% максим
   await expect(page.getByTestId('tip-limit')).toContainText('50%')
   await page.getByRole('button', { name: 'Оплатить', exact: true }).click()
   await page.getByRole('button', { name: 'Подтвердить оплату', exact: true }).click()
+  await page.waitForURL(/\/pay\/p_\d+\/status/)
+  await expect(page.locator('h1')).toBeVisible()
+  // Новый QR может получить hash 9 и уйти в PENDING: тогда сначала завершаем обработку.
   const checkStatus = page.getByRole('button', { name: 'Проверить статус', exact: true })
-  if (await checkStatus.isVisible()) await checkStatus.click()
+  if (await checkStatus.count()) await checkStatus.click()
   await expect(page.getByRole('heading', { name: 'Спасибо! Чаевые отправлены' })).toBeVisible()
   await expect(page.getByLabel('Ваш отзыв о работе Вероника')).toBeVisible()
 })
