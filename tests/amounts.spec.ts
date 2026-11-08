@@ -2,20 +2,39 @@ import { expect, test } from '@playwright/test'
 import { loginAs, monitor, route } from './routes'
 import { readFile } from 'node:fs/promises'
 
-test('проценты на главной передаются в форму и меняют итог', async ({ page }) => {
+test('главная рассчитывает чаевые и создаёт новый одноразовый чек при каждом переходе', async ({ page }) => {
   const errors = monitor(page)
   await page.goto(route('/'))
-  for (const pct of [5, 15, 10]) {
+  await expect(page.getByText('Чек r_1001', { exact: true })).toHaveCount(0)
+  await page.getByTestId('home-open-qr').click()
+  await expect(page.getByRole('alert')).toContainText('AMOUNT_OUT_OF_RANGE')
+  await page.getByLabel('Сумма чека, ₽').fill('637')
+  for (const pct of [10, 15, 10]) {
     const button = page.getByTestId(`home-tip-${pct}`)
     await button.click()
     await expect(button).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByTestId('home-open-qr')).toHaveAttribute('href', `#/p/qr_001?tip=${pct}`)
+    await expect(page.getByTestId('home-tip-amount')).toHaveText(pct === 10 ? /63,70/ : /95,55/)
   }
-  await page.getByTestId('home-tip-5').click()
+  await page.getByLabel('Другая сумма чаевых, ₽').fill('250')
+  await expect(page.getByTestId('home-tip-custom')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('home-amount-total')).toHaveText(/887,00/)
+  await page.getByTestId('home-tip-10').click()
   await page.getByTestId('home-open-qr').click()
+  await expect(page.getByRole('heading', { name: 'Вероника', exact: true })).toBeVisible()
+  const firstQr = await page.evaluate(() => JSON.parse(localStorage.getItem('spasibo-demo-state-v3')!).qr_links[0])
+  expect(firstQr).toMatchObject({ base_amount: 637, used: false })
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click()
-  await expect(page.getByTestId('tip-5')).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByTestId('amount-total')).toHaveText(/668,85/)
+  await expect(page.getByTestId('tip-10')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('amount-total')).toHaveText(/700,70/)
+  await page.goto(route('/'))
+  await page.getByLabel('Сумма чека, ₽').fill('800')
+  await page.getByTestId('home-open-qr').click()
+  await expect(page.getByRole('heading', { name: 'Ваш чек', exact: true })).toBeVisible()
+  await expect(page.getByTestId('error-code')).toHaveCount(0)
+  const secondQr = await page.evaluate(() => JSON.parse(localStorage.getItem('spasibo-demo-state-v3')!).qr_links[0])
+  expect(secondQr).toMatchObject({ base_amount: 800, used: false })
+  expect(secondQr.qr_id).not.toBe(firstQr.qr_id)
+  expect(secondQr.receipt_id).not.toBe(firstQr.receipt_id)
   expect(errors).toEqual([])
 })
 
@@ -35,7 +54,7 @@ test('генерация QR содержит 6 полей, PNG и полный U
   const download = await downloadPromise
   expect(download.suggestedFilename()).toBe('qr_101-r_1101.png')
   const generated = await page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem('spasibo-demo-state-v2')!)
+    const state = JSON.parse(localStorage.getItem('spasibo-demo-state-v3')!)
     return state.qr_links.find((qr: { qr_id: string }) => qr.qr_id === 'qr_101')
   })
   expect(generated.nonce).toMatch(/^[a-f0-9]{6}$/)
@@ -57,5 +76,5 @@ test('CSV мерчанта сохраняет 7 колонок и суммы и�
   const csv = await readFile(path!, 'utf8')
   expect(csv).toContain('"payment_id","merchant_id","employee_id","amount","tip","status","timestamp"')
   expect(csv).toContain('p_0001')
-  expect(csv).toContain('31.85')
+  expect(csv).toContain('250')
 })

@@ -31,6 +31,7 @@ test('официант видит только свои чаевые и маск
   await expect(page.getByText('p_0001', { exact: true })).toBeVisible()
   await expect(page.getByText('p_0002', { exact: true })).toHaveCount(0)
   await expect(page.getByText('****1001', { exact: true })).toBeVisible()
+  await expect(page.getByText('350,00 ₽', { exact: true })).toBeVisible()
   expect(errors).toEqual([])
 })
 
@@ -38,8 +39,8 @@ test('мерчант получает отчёт, рассчитанный из 
   const errors = monitor(page)
   await loginAs(page, 'manager')
   await expect(page.getByRole('heading', { name: 'Отчёт по чаевым' })).toBeVisible()
-  await expect(page.getByText('414,85 ₽', { exact: true })).toBeVisible()
-  await expect(page.getByText('9.00%', { exact: true })).toBeVisible()
+  await expect(page.getByText('1 031,25 ₽', { exact: true })).toBeVisible()
+  await expect(page.getByText('23.54%', { exact: true })).toBeVisible()
   await expect(page.getByText('83%', { exact: true })).toBeVisible()
   expect(errors).toEqual([])
 })

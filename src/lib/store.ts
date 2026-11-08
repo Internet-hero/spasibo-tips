@@ -3,7 +3,7 @@ import { createSeedState } from '@/lib/demo'
 import { calcAmounts, emulateGateway, signQrPayload, verifyQrSignature } from '@/lib/qr'
 import type { AuditAction, AuditEvent, DemoState, Employee, Merchant, Payment, PaymentInput, PaymentStatus, QrGenerationInput, QrLink, Role } from '@/types'
 
-const STORAGE_KEY = 'spasibo-demo-state-v2'
+const STORAGE_KEY = 'spasibo-demo-state-v3'
 const listeners = new Set<() => void>()
 let state: DemoState | null = null
 const attempts = new Map<string, number[]>()
@@ -32,7 +32,7 @@ const loadState = (): DemoState => {
     const saved = window.localStorage.getItem(STORAGE_KEY)
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState
-      if (parsed.version === 2) return parsed
+      if (parsed.version === 3) return parsed
     }
   } catch {
     // Повреждённый локальный черновик не блокирует демо.
@@ -111,11 +111,10 @@ export function createPaymentInState(current: DemoState, input: PaymentInput): {
   if (!Number.isFinite(input.base_amount) || input.base_amount <= 0 || input.base_amount > 1_000_000 || Math.abs(input.base_amount - qr.base_amount) > 0.001) {
     throw new DemoError('AMOUNT_OUT_OF_RANGE', 'Сумма чека должна быть больше 0 и не больше 1 000 000 ₽')
   }
-  if (!Number.isFinite(input.tip_pct) || input.tip_pct < 0 || input.tip_pct > 50) {
-    throw new DemoError('TIP_OUT_OF_RANGE', 'Чаевые должны быть от 0% до 50% суммы чека')
+  if (!Number.isFinite(input.tip_pct) || input.tip_pct < 0) {
+    throw new DemoError('TIP_OUT_OF_RANGE', 'Укажите неотрицательную сумму чаевых')
   }
-  const { tip, total } = calcAmounts(qr.base_amount, input.tip_pct)
-  if (total > 2_000_000) throw new DemoError('AMOUNT_OUT_OF_RANGE', 'Итоговая сумма превышает 2 000 000 ₽')
+  const { tip } = calcAmounts(qr.base_amount, input.tip_pct)
   const payment: Payment = {
     payment_id: nextNumericId(current.payments.map((item) => item.payment_id), 'p_', 4),
     merchant_id: qr.merchant_id,
@@ -160,6 +159,19 @@ export function confirmPaymentInState(current: DemoState, paymentId: string): De
   }
 }
 
+export function resolvePaymentInState(current: DemoState, paymentId: string): DemoState {
+  const payment = current.payments.find((item) => item.payment_id === paymentId)
+  if (!payment) throw new DemoError('PAYMENT_NOT_FOUND', 'Платёж не найден', 404)
+  if (payment.status !== 'PENDING') return current
+  const resolved: Payment = { ...payment, status: 'SUCCESS', error_code: undefined }
+  const event = audit(current.audit, resolved, 'payment_confirmed', 'PENDING', 'SUCCESS', 'system')
+  return {
+    ...current,
+    payments: current.payments.map((item) => item.payment_id === paymentId ? resolved : item),
+    audit: [...current.audit, event],
+  }
+}
+
 export function cancelPaymentInState(current: DemoState, paymentId: string): DemoState {
   const payment = current.payments.find((item) => item.payment_id === paymentId)
   if (!payment) throw new DemoError('PAYMENT_NOT_FOUND', 'Платёж не найден', 404)
@@ -190,6 +202,9 @@ export const demoActions = {
   },
   confirmPayment(paymentId: string) {
     commit(confirmPaymentInState(getState(), paymentId))
+  },
+  resolvePayment(paymentId: string) {
+    commit(resolvePaymentInState(getState(), paymentId))
   },
   cancelPayment(paymentId: string) {
     commit(cancelPaymentInState(getState(), paymentId))

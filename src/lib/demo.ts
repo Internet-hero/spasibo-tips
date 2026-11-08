@@ -26,6 +26,11 @@ const featured: Record<string, Pick<Employee, 'name' | 'avatar' | 'position' | '
   e_003: { name: 'Антон', avatar: '/avatars/anton.jpg', position: 'Официант', invite_code: 'SOFIA2026' },
 }
 
+const featuredTips: Record<string, number> = {
+  p_0001: 250,
+  p_0055: 450,
+}
+
 function historicalAudit(payment: Payment, index: number): AuditEvent {
   const actions: Record<PaymentStatus, AuditAction> = {
     CREATED: 'payment_created',
@@ -58,7 +63,7 @@ export const createSeedState = (): DemoState => {
   const payments: Payment[] = paymentRows.map((row, index) => ({
     ...row,
     amount: Number(row.amount),
-    tip: Number(row.tip),
+    tip: featuredTips[row.payment_id] ?? Number(row.tip),
     qr_id: `qr_${String(index + 1).padStart(3, '0')}`,
   }))
   const freshExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
@@ -72,7 +77,7 @@ export const createSeedState = (): DemoState => {
     return { ...qr, signature: index < 3 ? signQrPayload(qr) : row.signature }
   })
   return {
-    version: 2,
+    version: 3,
     merchants: merchants.map((merchant) => ({ ...merchant })),
     employees: employeeRows.map((employee) => ({
       ...employee,

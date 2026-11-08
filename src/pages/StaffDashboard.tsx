@@ -24,11 +24,11 @@ export default function StaffDashboard() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Отчёт официанта">
         <Stat title="Сумма чаевых" value={formatMoney(report.tips_total)} icon={Wallet} featured />
         <Stat title="Платежей" value={String(report.payments_count)} icon={ReceiptText} />
-        <Stat title="Средние чаевые" value={formatMoney(report.avg_tip_amount)} icon={TrendingUp} />
+        <Stat title="Средние чаевые" value={formatMoney(report.avg_tip_amount)} note="за заказ" icon={TrendingUp} />
         <Stat title="Лучший день" value={report.top_day} icon={CalendarDays} />
       </section>
       <section className="surface mt-6 overflow-hidden">
-        <div className="p-5 sm:p-6"><h2 className="text-lg font-extrabold">Мои платежи</h2><p className="text-sm text-muted-foreground">Сумма чека, чаевые, итог и статус эмулятора</p></div>
+        <div className="p-5 sm:p-6"><h2 className="text-lg font-extrabold">Мои платежи</h2><p className="text-sm text-muted-foreground">Сумма чека, чаевые, итог и статус оплаты</p></div>
         <div className="overflow-x-auto"><table className="admin-table min-w-[680px]"><thead><tr><th>Дата</th><th>Платёж / чек</th><th>Чаевые</th><th>Итого</th><th>Статус</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.payment_id}><td>{new Date(payment.timestamp).toLocaleString('ru-RU')}</td><td><p className="font-bold">{payment.payment_id}</p><p className="text-xs text-muted-foreground">{payment.qr_id}</p></td><td className="font-extrabold">{formatMoney(payment.tip)}</td><td>{formatMoney(paymentTotal(payment))}</td><td><StatusBadge status={payment.status} /></td></tr>)}</tbody></table></div>
         {payments.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Ваши платежи появятся после первого клиента.</p>}
       </section>
@@ -37,6 +37,6 @@ export default function StaffDashboard() {
   )
 }
 
-function Stat({ title, value, icon: Icon, featured = false }: { title: string; value: string; icon: typeof Wallet; featured?: boolean }) {
-  return <article className={`surface p-5 ${featured ? 'bg-primary text-primary-foreground' : ''}`}><div className="flex items-center justify-between"><p className={`text-sm font-bold ${featured ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{title}</p><Icon className={`size-5 ${featured ? 'text-accent' : 'text-primary'}`} /></div><p className="display-font mt-4 break-words text-xl font-semibold tracking-tight">{value}</p></article>
+function Stat({ title, value, note, icon: Icon, featured = false }: { title: string; value: string; note?: string; icon: typeof Wallet; featured?: boolean }) {
+  return <article className={`surface p-5 ${featured ? 'bg-primary text-primary-foreground' : ''}`}><div className="flex items-center justify-between"><p className={`text-sm font-bold ${featured ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{title}</p><Icon className={`size-5 ${featured ? 'text-accent' : 'text-primary'}`} /></div><p className="display-font mt-4 break-words text-xl font-semibold tracking-tight">{value}</p>{note && <p className="mt-1 text-xs text-muted-foreground">{note}</p>}</article>
 }

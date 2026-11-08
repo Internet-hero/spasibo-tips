@@ -10,7 +10,7 @@ import { calcAmounts } from '@/lib/qr'
 import { DemoError, demoActions, useDemoState, validateQr } from '@/lib/store'
 import Unavailable from '@/pages/Unavailable'
 
-const tipOptions = [0, 5, 10, 15, 20]
+const tipOptions = [10, 15]
 type Step = 'welcome' | 'choose' | 'confirm'
 
 export default function PaymentPage() {
@@ -19,9 +19,10 @@ export default function PaymentPage() {
   const qrToken = pathQrToken || searchParams.get('qr') || ''
   const navigate = useNavigate()
   const state = useDemoState()
-  const initialTip = Number(searchParams.get('tip'))
+  const initialTipParam = searchParams.get('tip')
+  const initialTip = initialTipParam === null ? 10 : Number(initialTipParam)
   const [step, setStep] = useState<Step>('welcome')
-  const [tipPct, setTipPct] = useState(Number.isFinite(initialTip) && initialTip >= 0 && initialTip <= 50 ? initialTip : 10)
+  const [tipPct, setTipPct] = useState(Number.isFinite(initialTip) && initialTip >= 0 ? initialTip : 10)
   const [customTip, setCustomTip] = useState('')
   const [paymentId, setPaymentId] = useState('')
   const [error, setError] = useState('')
@@ -48,7 +49,7 @@ export default function PaymentPage() {
     event.preventDefault()
     setError('')
     try {
-      if (!Number.isFinite(effectivePct) || effectivePct < 0 || effectivePct > 50) throw new DemoError('TIP_OUT_OF_RANGE', 'Чаевые должны быть от 0% до 50% суммы чека')
+      if (!Number.isFinite(effectivePct) || effectivePct < 0) throw new DemoError('TIP_OUT_OF_RANGE', 'Укажите неотрицательную сумму чаевых')
       if (!idempotencyKey.current) idempotencyKey.current = `tip-${qr.qr_id}-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const payment = demoActions.createPayment({
         qr_id: qr.qr_id,
@@ -91,7 +92,7 @@ export default function PaymentPage() {
       <PublicHeader backTo="/" backLabel="На главную" />
       <main className="page-container max-w-2xl py-3 sm:py-7">
         <ol className="mb-6 grid grid-cols-4 gap-2" aria-label="Этапы оплаты">
-          {['Чек', 'Чаевые', 'Подтверждение', 'Результат'].map((label, index) => <li key={label} className={`rounded-xl px-2 py-2 text-center text-xs font-bold ${index + 1 === stepNumber ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`} aria-current={index + 1 === stepNumber ? 'step' : undefined}>{index + 1}. {label}</li>)}
+          {['Чек', 'Чаевые', 'Оплата', 'Итог'].map((label, index) => <li key={label} className={`min-w-0 rounded-xl px-1 py-2 text-center text-[10px] font-bold sm:px-2 sm:text-xs ${index + 1 === stepNumber ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`} aria-current={index + 1 === stepNumber ? 'step' : undefined}>{index + 1}. {label}</li>)}
         </ol>
         <section className="mb-5 flex items-center gap-4 sm:gap-5">
           <StaffAvatar member={employee} size="lg" />
@@ -110,15 +111,16 @@ export default function PaymentPage() {
 
         {step === 'choose' && <form onSubmit={openConfirmation} className="surface p-5 sm:p-7" noValidate>
           <h2 className="text-xl font-extrabold">Выберите чаевые</h2>
-          <p className="mt-1 text-sm text-muted-foreground">От 0% до 50% от суммы чека</p>
-          <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5" role="group" aria-label="Процент чаевых">
+          <p className="mt-1 text-sm text-muted-foreground">Выберите процент или укажите любую сумму в рублях</p>
+          <div className="mt-5 grid grid-cols-3 gap-2" role="group" aria-label="Размер чаевых">
             {tipOptions.map((pct) => <button key={pct} type="button" data-testid={`tip-${pct}`} onClick={() => { setTipPct(pct); setCustomTip(''); setError('') }} aria-pressed={customTip === '' && tipPct === pct} className={`min-h-12 cursor-pointer rounded-2xl border-2 text-base font-extrabold transition ${customTip === '' && tipPct === pct ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:border-primary'}`}>{pct}%</button>)}
+            <button type="button" data-testid="tip-custom" onClick={() => document.getElementById('custom-tip')?.focus()} aria-pressed={customTip !== ''} className={`min-h-12 cursor-pointer rounded-2xl border-2 text-sm font-extrabold transition ${customTip !== '' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:border-primary'}`}>Другая сумма</button>
           </div>
-          <label className="field-label mt-5" htmlFor="custom-tip">Или своя сумма чаевых, ₽</label>
-          <input id="custom-tip" type="number" inputMode="decimal" min="0" max={qr.base_amount / 2} step="0.01" value={customTip} onChange={(event) => { setCustomTip(event.target.value); setError('') }} className="field-input" placeholder="Например, 50" />
+          <label className="field-label mt-5" htmlFor="custom-tip">Другая сумма чаевых, ₽</label>
+          <input id="custom-tip" type="number" inputMode="decimal" min="0" step="0.01" value={customTip} onChange={(event) => { setCustomTip(event.target.value); setError('') }} className="field-input" placeholder="Например, 250" />
           <div className="mt-6 space-y-3 rounded-2xl bg-secondary/55 p-5">
             <div className="flex justify-between gap-4 text-sm"><span>Чек</span><strong>{formatMoney(qr.base_amount)}</strong></div>
-            <div className="flex justify-between gap-4 text-sm"><span>Чаевые · {safePct.toFixed(2)}%</span><strong data-testid="tip-amount">{formatMoney(amounts.tip)}</strong></div>
+            <div className="flex justify-between gap-4 text-sm"><span>Чаевые{customTip === '' ? ` · ${safePct.toFixed(0)}%` : ''}</span><strong data-testid="tip-amount">{formatMoney(amounts.tip)}</strong></div>
             <div className="soft-divider" />
             <div className="flex items-end justify-between gap-4"><span className="font-extrabold">Итого</span><strong className="display-font text-2xl" data-testid="amount-total">{formatMoney(amounts.total)}</strong></div>
           </div>
@@ -129,7 +131,7 @@ export default function PaymentPage() {
         {step === 'confirm' && <section className="surface p-5 sm:p-7" aria-labelledby="confirm-title">
           <CreditCard className="size-8 text-accent" />
           <h2 id="confirm-title" className="display-font mt-5 text-2xl font-semibold">Подтверждение</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Эмулятор шлюза не списывает реальные деньги и не запрашивает данные карты.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Проверьте сумму чека и чаевых перед подтверждением.</p>
           <dl className="mt-6 space-y-4 rounded-2xl bg-muted p-5">
             <div className="flex justify-between gap-4"><dt>Сумма чека</dt><dd className="font-bold">{formatMoney(qr.base_amount)}</dd></div>
             <div className="flex justify-between gap-4"><dt>Чаевые</dt><dd className="font-bold">{formatMoney(amounts.tip)}</dd></div>

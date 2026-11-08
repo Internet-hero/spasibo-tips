@@ -66,7 +66,7 @@ export interface Session {
 }
 
 export interface DemoState {
-  version: 2
+  version: 3
   merchants: Merchant[]
   employees: Employee[]
   payments: Payment[]

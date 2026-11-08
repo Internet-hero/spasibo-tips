@@ -1,5 +1,7 @@
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowRight, Check, Clock3, Home, RotateCcw, X } from 'lucide-react'
+import { ArrowRight, Check, Clock3, Home, MessageSquareText, RotateCcw, Send, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { StaffAvatar } from '@/components/StaffAvatar'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -10,6 +12,9 @@ import { demoActions, useDemoState } from '@/lib/store'
 export default function PaymentStatus() {
   const { paymentId = '' } = useParams()
   const state = useDemoState()
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [review, setReview] = useState('')
+  const [reviewSent, setReviewSent] = useState(false)
   const payment = state.payments.find((item) => item.payment_id === paymentId)
   const employee = state.employees.find((item) => item.employee_id === payment?.employee_id)
   if (!payment || !employee) return <div className="grid min-h-[100dvh] place-items-center p-5 text-center"><div><h1 className="display-font text-2xl">Платёж не найден</h1><Button asChild className="mt-5 rounded-full"><Link to="/">На главную</Link></Button></div></div>
@@ -18,7 +23,11 @@ export default function PaymentStatus() {
   const declined = payment.status === 'DECLINED'
   const canceled = payment.status === 'CANCELED'
   const title = success ? 'Спасибо! Чаевые отправлены' : pending ? 'Обрабатываем, проверьте через минуту' : declined ? 'Оплата не прошла, попробуйте другой способ' : canceled ? 'Платёж отменён' : 'Платёж создан'
-  const description = success ? `${employee.name} получит чаевые после демонстрационного подтверждения шлюза.` : pending ? 'Эмулятор вернул TIMEOUT. Платёж остаётся в PENDING, отмена на этом этапе запрещена.' : declined ? 'Шлюз отклонил операцию. Деньги не списаны.' : canceled ? 'Платёж отменён до подтверждения, списания не было.' : 'Платёж ожидает подтверждения клиентом.'
+  const description = success ? `${employee.name} получит ваши чаевые. Спасибо за поддержку команды!` : pending ? 'Операция обрабатывается. Нажмите «Проверить статус», чтобы завершить обработку.' : declined ? 'Шлюз отклонил операцию. Деньги не списаны.' : canceled ? 'Платёж отменён до подтверждения, списания не было.' : 'Платёж ожидает подтверждения клиентом.'
+  const submitReview = (event: FormEvent) => {
+    event.preventDefault()
+    if (review.trim()) setReviewSent(true)
+  }
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-background pb-[env(safe-area-inset-bottom)]">
       <header className="page-container py-3"><Logo /></header>
@@ -38,8 +47,15 @@ export default function PaymentStatus() {
             <div className="flex justify-between gap-4"><dt>Итого</dt><dd className="font-extrabold">{formatMoney(paymentTotal(payment))}</dd></div>
           </dl>
           {success && <div className="mb-6 flex items-center justify-center gap-3"><StaffAvatar member={employee} size="md" /><div className="text-left"><p className="font-extrabold">{employee.name}</p><p className="text-sm text-muted-foreground">{employee.position}</p></div></div>}
+          {success && !reviewOpen && !reviewSent && <Button variant="outline" size="lg" className="mb-3 w-full rounded-2xl" onClick={() => setReviewOpen(true)}><MessageSquareText />Оставить отзыв о работе</Button>}
+          {success && reviewOpen && !reviewSent && <form onSubmit={submitReview} className="mb-4 rounded-2xl border bg-card p-4 text-left">
+            <label htmlFor="employee-review" className="field-label">Ваш отзыв о работе {employee.name}</label>
+            <textarea id="employee-review" value={review} onChange={(event) => setReview(event.target.value)} required minLength={3} className="min-h-24 w-full rounded-2xl border bg-background p-3 text-sm outline-none focus:border-primary" placeholder="Что вам понравилось?" />
+            <Button type="submit" className="mt-3 w-full rounded-2xl"><Send />Отправить отзыв</Button>
+          </form>}
+          {success && reviewSent && <p className="mb-4 rounded-2xl bg-secondary/60 p-4 text-sm font-bold text-primary" role="status">Спасибо! Ваш отзыв отправлен.</p>}
           <div className="grid gap-3">
-            {pending && <Button size="lg" className="rounded-2xl" onClick={() => window.location.reload()}><RotateCcw />Проверить статус</Button>}
+            {pending && <Button size="lg" className="rounded-2xl" onClick={() => demoActions.resolvePayment(payment.payment_id)}><RotateCcw />Проверить статус</Button>}
             {payment.status === 'CREATED' && <Button size="lg" variant="outline" className="rounded-2xl" onClick={() => demoActions.cancelPayment(payment.payment_id)}>Отменить платёж</Button>}
             <Button asChild size="lg" variant={success || pending ? 'outline' : 'default'} className="rounded-2xl"><Link to="/"><Home />На главную</Link></Button>
           </div>
