@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { ArrowRight, Check, Clock3, Home, MessageSquareText, RotateCcw, Send, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { StaffAvatar } from '@/components/StaffAvatar'
@@ -11,8 +11,10 @@ import { demoActions, useDemoState } from '@/lib/store'
 
 export default function PaymentStatus() {
   const { paymentId = '' } = useParams()
+  const [searchParams] = useSearchParams()
   const state = useDemoState()
-  const [reviewOpen, setReviewOpen] = useState(false)
+  const reviewRequested = searchParams.get('review') === '1'
+  const [reviewOpen, setReviewOpen] = useState(reviewRequested)
   const [review, setReview] = useState('')
   const [reviewSent, setReviewSent] = useState(false)
   const payment = state.payments.find((item) => item.payment_id === paymentId)
@@ -49,6 +51,7 @@ export default function PaymentStatus() {
           {success && <div className="mb-6 flex items-center justify-center gap-3"><StaffAvatar member={employee} size="md" /><div className="text-left"><p className="font-extrabold">{employee.name}</p><p className="text-sm text-muted-foreground">{employee.position}</p></div></div>}
           {success && !reviewOpen && !reviewSent && <Button variant="outline" size="lg" className="mb-3 w-full rounded-2xl" onClick={() => setReviewOpen(true)}><MessageSquareText />Оставить отзыв о работе</Button>}
           {success && reviewOpen && !reviewSent && <form onSubmit={submitReview} className="mb-4 rounded-2xl border bg-card p-4 text-left">
+            {reviewRequested && <p className="mb-3 text-sm text-muted-foreground">Вы выбрали больше 50%, поэтому чаевые установлены на максимум. Расскажите, что именно понравилось!</p>}
             <label htmlFor="employee-review" className="field-label">Ваш отзыв о работе {employee.name}</label>
             <textarea id="employee-review" value={review} onChange={(event) => setReview(event.target.value)} required minLength={3} className="min-h-24 w-full rounded-2xl border bg-background p-3 text-sm outline-none focus:border-primary" placeholder="Что вам понравилось?" />
             <Button type="submit" className="mt-3 w-full rounded-2xl"><Send />Отправить отзыв</Button>

@@ -1,0 +1,123 @@
+openapi: 3.0.3
+info:
+  title: Tips Platform
+  version: "1.0.0"
+  description: Онлайн-чаевые для сети «Вкус-Сервис»
+servers:
+  - url: http://localhost:8083
+components:
+  schemas:
+    QRPayload:
+      type: object
+      required: [merchant_id, employee_id, receipt_id, nonce, exp, signature]
+      properties:
+        merchant_id: {type: string, pattern: '^m_[0-9]{3}$'}
+        employee_id: {type: string, pattern: '^e_[0-9]{3}$'}
+        receipt_id: {type: string, pattern: '^r_[0-9]{4}$'}
+        nonce: {type: string, pattern: '^[a-f0-9]{6}$'}
+        exp: {type: string, format: date-time}
+        signature: {type: string, pattern: '^[a-f0-9]{16}$'}
+    QRResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/QRPayload'
+        - type: object
+          required: [qr_id, employee_name, base_amount, currency, tip_options]
+          properties:
+            qr_id: {type: string, pattern: '^qr_[0-9]{3}$'}
+            employee_name: {type: string}
+            base_amount: {type: number, minimum: 0.01, maximum: 1000000}
+            currency: {type: string, example: RUB}
+            tip_options: {type: array, items: {type: number}, example: [10, 15]}
+    TipCreate:
+      type: object
+      required: [qr_id, receipt_id, base_amount, tip_pct, idempotency_key]
+      properties:
+        qr_id: {type: string}
+        receipt_id: {type: string}
+        base_amount: {type: number, exclusiveMinimum: 0, maximum: 1000000}
+        tip_pct: {type: number, minimum: 0, maximum: 50}
+        idempotency_key: {type: string, minLength: 1}
+    Payment:
+      type: object
+      required: [payment_id, status, amount_total, tip_amount]
+      properties:
+        payment_id: {type: string}
+        status: {type: string, enum: [CREATED, PENDING, SUCCESS, DECLINED, CANCELED]}
+        amount_total: {type: number, minimum: 0}
+        tip_amount: {type: number, minimum: 0}
+        confirm_token: {type: string}
+        error_code: {type: string, nullable: true}
+    Report:
+      type: object
+      required: [merchant_id, period, tips_total, payments_count, avg_tip_pct, success_rate]
+      properties:
+        merchant_id: {type: string}
+        period: {type: string, pattern: '^[0-9]{4}-[0-9]{2}$'}
+        tips_total: {type: number, minimum: 0}
+        payments_count: {type: integer, minimum: 0}
+        avg_tip_pct: {type: number, minimum: 0}
+        success_rate: {type: number, minimum: 0, maximum: 1}
+    Error:
+      type: object
+      required: [error_code, message, retryable]
+      properties:
+        error_code: {type: string}
+        message: {type: string}
+        retryable: {type: boolean}
+        details: {type: object, nullable: true}
+paths:
+  /health:
+    get:
+      summary: Проверка живости
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {type: object, properties: {status: {type: string}}}
+  /api/v1/qr/{qr_id}:
+    get:
+      summary: Данные QR для формы чаевых
+      parameters: [{name: qr_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: QR найден, content: {application/json: {schema: {$ref: '#/components/schemas/QRResponse'}}}}
+        '404': {description: QR не найден}
+        '410': {description: QR_EXPIRED}
+        '422': {description: INVALID_QR}
+  /api/v1/tips:
+    post:
+      summary: Создать платёж с чаевыми
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/TipCreate'}}}
+      responses:
+        '200': {description: Существующий платёж по idempotency_key, content: {application/json: {schema: {$ref: '#/components/schemas/Payment'}}}}
+        '201': {description: Платёж создан, content: {application/json: {schema: {$ref: '#/components/schemas/Payment'}}}}
+        '409': {description: QR_USED или конфликт}
+        '422': {description: Ошибка валидации}
+  /api/v1/payments/{id}/confirm:
+    post:
+      summary: Подтвердить платёж
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: Результат подтверждения, content: {application/json: {schema: {$ref: '#/components/schemas/Payment'}}}}
+        '402': {description: CARD_DECLINED}
+        '409': {description: PAYMENT_NOT_CONFIRMABLE}
+  /api/v1/payments/{id}/cancel:
+    post:
+      summary: Отменить платёж до подтверждения
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: Платёж отменён, content: {application/json: {schema: {$ref: '#/components/schemas/Payment'}}}}
+        '409': {description: CANCEL_NOT_ALLOWED}
+  /api/v1/reports/tips:
+    get:
+      summary: Отчёт по чаевым
+      parameters:
+        - {name: merchant_id, in: query, required: true, schema: {type: string}}
+        - {name: from, in: query, required: true, schema: {type: string, format: date}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date}}
+      responses:
+        '200': {description: Отчёт, content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}}
+        '403': {description: Нет доступа}

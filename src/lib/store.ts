@@ -111,8 +111,8 @@ export function createPaymentInState(current: DemoState, input: PaymentInput): {
   if (!Number.isFinite(input.base_amount) || input.base_amount <= 0 || input.base_amount > 1_000_000 || Math.abs(input.base_amount - qr.base_amount) > 0.001) {
     throw new DemoError('AMOUNT_OUT_OF_RANGE', 'Сумма чека должна быть больше 0 и не больше 1 000 000 ₽')
   }
-  if (!Number.isFinite(input.tip_pct) || input.tip_pct < 0) {
-    throw new DemoError('TIP_OUT_OF_RANGE', 'Укажите неотрицательную сумму чаевых')
+  if (!Number.isFinite(input.tip_pct) || input.tip_pct < 0 || input.tip_pct > 50) {
+    throw new DemoError('TIP_OUT_OF_RANGE', 'Чаевые должны быть от 0% до 50% суммы чека')
   }
   const { tip } = calcAmounts(qr.base_amount, input.tip_pct)
   const payment: Payment = {

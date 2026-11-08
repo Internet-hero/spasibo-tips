@@ -1,0 +1,3 @@
+payment_id,merchant_id,employee_id,amount,tip,status,timestamp
+p_demo_001,m_001,e_001,637.00,31.85,SUCCESS,2025-11-01T18:00:00Z
+p_demo_003,m_001,e_003,911.00,136.65,DECLINED,2025-11-01T18:00:00Z

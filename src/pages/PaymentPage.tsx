@@ -22,8 +22,9 @@ export default function PaymentPage() {
   const initialTipParam = searchParams.get('tip')
   const initialTip = initialTipParam === null ? 10 : Number(initialTipParam)
   const [step, setStep] = useState<Step>('welcome')
-  const [tipPct, setTipPct] = useState(Number.isFinite(initialTip) && initialTip >= 0 ? initialTip : 10)
+  const [tipPct, setTipPct] = useState(Number.isFinite(initialTip) && initialTip >= 0 ? Math.min(initialTip, 50) : 10)
   const [customTip, setCustomTip] = useState('')
+  const [reviewRequested, setReviewRequested] = useState(searchParams.get('review') === '1')
   const [paymentId, setPaymentId] = useState('')
   const [error, setError] = useState('')
   const [processing, setProcessing] = useState(false)
@@ -41,7 +42,9 @@ export default function PaymentPage() {
   if (!qr || !merchant || !employee) return <Unavailable title="QR-код недействителен" text="Данные сотрудника или заведения не найдены." code="INVALID_QR" />
 
   const effectivePct = customTip !== '' ? Number(customTip) / qr.base_amount * 100 : tipPct
-  const safePct = Number.isFinite(effectivePct) ? effectivePct : 0
+  const tipExceeded = Number.isFinite(effectivePct) && effectivePct > 50
+  const safePct = Number.isFinite(effectivePct) && effectivePct >= 0 ? Math.min(effectivePct, 50) : 0
+  const shouldOfferReview = reviewRequested || tipExceeded
   const amounts = calcAmounts(qr.base_amount, safePct)
   const stepNumber = step === 'welcome' ? 1 : step === 'choose' ? 2 : 3
 
@@ -55,7 +58,7 @@ export default function PaymentPage() {
         qr_id: qr.qr_id,
         receipt_id: qr.receipt_id,
         base_amount: qr.base_amount,
-        tip_pct: effectivePct,
+        tip_pct: safePct,
         idempotency_key: idempotencyKey.current,
       })
       setPaymentId(payment.payment_id)
@@ -71,7 +74,7 @@ export default function PaymentPage() {
     try {
       await new Promise((resolve) => setTimeout(resolve, 650))
       demoActions.confirmPayment(paymentId)
-      navigate(`/pay/${paymentId}/status`)
+      navigate(`/pay/${paymentId}/status${shouldOfferReview ? '?review=1' : ''}`)
     } catch (caught) {
       setError(caught instanceof DemoError ? `${caught.code}: ${caught.message}` : 'Не удалось подтвердить платёж')
       setProcessing(false)
@@ -111,19 +114,20 @@ export default function PaymentPage() {
 
         {step === 'choose' && <form onSubmit={openConfirmation} className="surface p-5 sm:p-7" noValidate>
           <h2 className="text-xl font-extrabold">Выберите чаевые</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Выберите процент или укажите любую сумму в рублях</p>
+          <p className="mt-1 text-sm text-muted-foreground">Выберите процент или укажите сумму в рублях — максимум 50% чека</p>
           <div className="mt-5 grid grid-cols-3 gap-2" role="group" aria-label="Размер чаевых">
-            {tipOptions.map((pct) => <button key={pct} type="button" data-testid={`tip-${pct}`} onClick={() => { setTipPct(pct); setCustomTip(''); setError('') }} aria-pressed={customTip === '' && tipPct === pct} className={`min-h-12 cursor-pointer rounded-2xl border-2 text-base font-extrabold transition ${customTip === '' && tipPct === pct ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:border-primary'}`}>{pct}%</button>)}
+            {tipOptions.map((pct) => <button key={pct} type="button" data-testid={`tip-${pct}`} onClick={() => { setTipPct(pct); setCustomTip(''); setReviewRequested(false); setError('') }} aria-pressed={customTip === '' && tipPct === pct} className={`min-h-12 cursor-pointer rounded-2xl border-2 text-base font-extrabold transition ${customTip === '' && tipPct === pct ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:border-primary'}`}>{pct}%</button>)}
             <button type="button" data-testid="tip-custom" onClick={() => document.getElementById('custom-tip')?.focus()} aria-pressed={customTip !== ''} className={`min-h-12 cursor-pointer rounded-2xl border-2 text-sm font-extrabold transition ${customTip !== '' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:border-primary'}`}>Другая сумма</button>
           </div>
           <label className="field-label mt-5" htmlFor="custom-tip">Другая сумма чаевых, ₽</label>
-          <input id="custom-tip" type="number" inputMode="decimal" min="0" step="0.01" value={customTip} onChange={(event) => { setCustomTip(event.target.value); setError('') }} className="field-input" placeholder="Например, 250" />
+          <input id="custom-tip" type="number" inputMode="decimal" min="0" step="0.01" value={customTip} onChange={(event) => { const value = event.target.value; setCustomTip(value); setReviewRequested(Number(value) / qr.base_amount * 100 > 50); setError('') }} className="field-input" placeholder="Например, 250" />
           <div className="mt-6 space-y-3 rounded-2xl bg-secondary/55 p-5">
             <div className="flex justify-between gap-4 text-sm"><span>Чек</span><strong>{formatMoney(qr.base_amount)}</strong></div>
-            <div className="flex justify-between gap-4 text-sm"><span>Чаевые{customTip === '' ? ` · ${safePct.toFixed(0)}%` : ''}</span><strong data-testid="tip-amount">{formatMoney(amounts.tip)}</strong></div>
+            <div className="flex justify-between gap-4 text-sm"><span>Чаевые{customTip === '' || tipExceeded ? ` · ${safePct.toFixed(0)}%` : ''}</span><strong data-testid="tip-amount">{formatMoney(amounts.tip)}</strong></div>
             <div className="soft-divider" />
             <div className="flex items-end justify-between gap-4"><span className="font-extrabold">Итого</span><strong className="display-font text-2xl" data-testid="amount-total">{formatMoney(amounts.total)}</strong></div>
           </div>
+          {shouldOfferReview && <div data-testid="tip-limit" className="mt-4 rounded-2xl border border-primary/20 bg-secondary/40 p-4 text-sm">Установили максимум по ТЗ — <strong>50% ({formatMoney(amounts.tip)})</strong>. После оплаты предложим рассказать, что именно понравилось.</div>}
           {error && <p role="alert" className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
           <Button type="submit" size="lg" className="mt-6 w-full rounded-2xl bg-accent text-accent-foreground">Оплатить<ArrowRight /></Button>
         </form>}

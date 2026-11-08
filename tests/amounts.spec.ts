@@ -38,6 +38,25 @@ test('главная рассчитывает чаевые и создаёт н�
   expect(errors).toEqual([])
 })
 
+test('главная заменяет чаевые больше 50% максимумом и сохраняет предложение отзыва', async ({ page }) => {
+  await page.goto(route('/'))
+  await page.getByLabel('Сумма чека, ₽').fill('1000')
+  await page.getByLabel('Другая сумма чаевых, ₽').fill('700')
+  await expect(page.getByTestId('home-tip-amount')).toHaveText(/500,00/)
+  await expect(page.getByTestId('home-amount-total')).toHaveText(/1\s*500,00/)
+  await expect(page.getByTestId('home-tip-limit')).toContainText('50%')
+  await page.getByTestId('home-open-qr').click()
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click()
+  await expect(page.getByTestId('tip-amount')).toHaveText(/500,00/)
+  await expect(page.getByTestId('tip-limit')).toContainText('50%')
+  await page.getByRole('button', { name: 'Оплатить', exact: true }).click()
+  await page.getByRole('button', { name: 'Подтвердить оплату', exact: true }).click()
+  const checkStatus = page.getByRole('button', { name: 'Проверить статус', exact: true })
+  if (await checkStatus.isVisible()) await checkStatus.click()
+  await expect(page.getByRole('heading', { name: 'Спасибо! Чаевые отправлены' })).toBeVisible()
+  await expect(page.getByLabel('Ваш отзыв о работе Вероника')).toBeVisible()
+})
+
 test('генерация QR содержит 6 полей, PNG и полный URL', async ({ page }) => {
   const errors = monitor(page)
   await loginAs(page, 'manager')

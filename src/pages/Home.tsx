@@ -26,7 +26,8 @@ export default function Home() {
   const baseAmount = Number(baseAmountInput)
   const hasBaseAmount = baseAmountInput.trim() !== '' && Number.isFinite(baseAmount) && baseAmount > 0
   const effectivePct = customTip !== '' ? Number(customTip) / baseAmount * 100 : tipPct
-  const safePct = Number.isFinite(effectivePct) && effectivePct >= 0 ? effectivePct : 0
+  const tipExceeded = Number.isFinite(effectivePct) && effectivePct > 50
+  const safePct = Number.isFinite(effectivePct) && effectivePct >= 0 ? Math.min(effectivePct, 50) : 0
   const amounts = calcAmounts(hasBaseAmount ? baseAmount : 0, safePct)
   const openRole = (role: Role) => navigate(`/login?role=${role}`)
   const openCalculator = () => {
@@ -41,7 +42,7 @@ export default function Home() {
       if (!Number.isFinite(effectivePct) || effectivePct < 0) throw new DemoError('TIP_OUT_OF_RANGE', 'Укажите неотрицательную сумму чаевых')
       const lastReceipt = Math.max(1000, ...state.qr_links.map((item) => Number(item.receipt_id.match(/^r_(\d+)$/)?.[1] ?? 0)))
       const qr = demoActions.addQr({ employee_id: employee?.employee_id ?? '', receipt_id: `r_${String(lastReceipt + 1).padStart(4, '0')}`, base_amount: baseAmount })
-      navigate(`/p/${qr.qr_id}?tip=${safePct}`)
+      navigate(`/p/${qr.qr_id}?tip=${safePct}${tipExceeded ? '&review=1' : ''}`)
     } catch (caught) {
       setError(caught instanceof DemoError ? `${caught.code}: ${caught.message}` : 'Не удалось создать новый чек')
     }
@@ -88,7 +89,8 @@ export default function Home() {
               </div>
               <label className="sr-only" htmlFor="home-custom-tip">Другая сумма чаевых, ₽</label>
               <input id="home-custom-tip" type="number" inputMode="decimal" min="0" step="0.01" value={customTip} onChange={(event) => { setCustomTip(event.target.value); setError('') }} className="field-input mt-3" placeholder="Своя сумма, например 250 ₽" />
-              <div className="mt-5 rounded-2xl bg-secondary/60 p-4 text-sm"><div className="flex justify-between gap-4"><span>Чаевые</span><strong data-testid="home-tip-amount">{hasBaseAmount ? formatMoney(amounts.tip) : '—'}</strong></div><div className="mt-2 flex justify-between gap-4 text-base"><span>Итого</span><strong data-testid="home-amount-total">{hasBaseAmount ? formatMoney(amounts.total) : '—'}</strong></div></div>
+              <div className="mt-5 rounded-2xl bg-secondary/60 p-4 text-sm"><div className="flex justify-between gap-4"><span>Чаевые{tipExceeded ? ' · 50%' : ''}</span><strong data-testid="home-tip-amount">{hasBaseAmount ? formatMoney(amounts.tip) : '—'}</strong></div><div className="mt-2 flex justify-between gap-4 text-base"><span>Итого</span><strong data-testid="home-amount-total">{hasBaseAmount ? formatMoney(amounts.total) : '—'}</strong></div></div>
+              {tipExceeded && <div data-testid="home-tip-limit" className="mt-4 flex items-start gap-3 rounded-2xl border border-primary/20 bg-secondary/40 p-4 text-sm"><MessageSquareText className="mt-0.5 size-5 shrink-0 text-primary" /><p>Установили максимум по ТЗ — <strong>50% ({formatMoney(amounts.tip)})</strong>. После оплаты вы сможете рассказать, что именно понравилось.</p></div>}
               {error && <p role="alert" className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
               <Button type="submit" data-testid="home-open-qr" className="mt-5 w-full bg-accent text-accent-foreground hover:bg-accent/90">Создать чек и продолжить<ArrowRight /></Button>
             </form>

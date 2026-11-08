@@ -76,7 +76,7 @@ test('T3-5: отмена CREATED до подтверждения', async ({ page
   expect(errors).toEqual([])
 })
 
-test('произвольная сумма не ограничена 50%, отрицательные чаевые отклоняются', async ({ page }) => {
+test('сумма больше 50% заменяется максимумом, после оплаты открывается отзыв', async ({ page }) => {
   await page.goto(route('/pay?qr=qr_001'))
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click()
   await expect(page.getByTestId('tip-0')).toHaveCount(0)
@@ -84,11 +84,16 @@ test('произвольная сумма не ограничена 50%, отр�
   await page.getByRole('button', { name: 'Оплатить', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('TIP_OUT_OF_RANGE')
   await page.getByLabel('Другая сумма чаевых, ₽').fill('700')
-  await expect(page.getByTestId('tip-amount')).toHaveText(/700,00/)
-  await expect(page.getByTestId('amount-total')).toHaveText(/1\s*337,00/)
+  await expect(page.getByTestId('tip-amount')).toHaveText(/318,50/)
+  await expect(page.getByTestId('amount-total')).toHaveText(/955,50/)
+  await expect(page.getByTestId('tip-limit')).toContainText('50%')
   await page.getByRole('button', { name: 'Оплатить', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Подтверждение' })).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Подтвердить оплату', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Спасибо! Чаевые отправлены' })).toBeVisible()
+  await expect(page.getByText('Расскажите, что именно понравилось!', { exact: false })).toBeVisible()
+  await expect(page.getByLabel('Ваш отзыв о работе Вероника')).toBeVisible()
 })
 
 test('GATEWAY_TIMEOUT завершается успехом по кнопке проверки статуса', async ({ page }) => {

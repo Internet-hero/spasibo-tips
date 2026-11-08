@@ -78,10 +78,9 @@ describe('QR: подпись, TTL, чек и границы', () => {
     expect(() => createPaymentInState(created.state, input({ idempotency_key: 'another-key' }))).toThrowError(expect.objectContaining({ code: 'QR_USED' }))
   })
 
-  it('не ограничивает чаевые 50% и отклоняет подмену суммы чека', () => {
+  it('ограничивает чаевые 50% и отклоняет подмену суммы чека', () => {
     const seed = createSeedState()
-    const created = createPaymentInState(seed, input({ tip_pct: 150 }))
-    expect(created.payment.tip).toBe(955.5)
+    expect(() => createPaymentInState(seed, input({ tip_pct: 150 }))).toThrowError(expect.objectContaining({ code: 'TIP_OUT_OF_RANGE' }))
     expect(() => createPaymentInState(seed, input({ base_amount: 1 }))).toThrowError(expect.objectContaining({ code: 'AMOUNT_OUT_OF_RANGE' }))
   })
 
@@ -90,11 +89,12 @@ describe('QR: подпись, TTL, чек и границы', () => {
     expect(gatewayHash('qr_003', '4443ae')).toBe(7)
   })
 
-  it('допускает 0%, 50% и большие суммы, но не отрицательные чаевые', () => {
+  it('допускает 0% и 50%, но не отрицательные или большие чаевые', () => {
     expect(calcAmounts(637, 0)).toEqual({ tip: 0, total: 637 })
     expect(calcAmounts(637, 50)).toEqual({ tip: 318.5, total: 955.5 })
-    expect(calcAmounts(637, 150)).toEqual({ tip: 955.5, total: 1592.5 })
+    expect(createPaymentInState(createSeedState(), input({ tip_pct: 50 })).payment.tip).toBe(318.5)
     expect(() => createPaymentInState(createSeedState(), input({ tip_pct: -1 }))).toThrowError(expect.objectContaining({ code: 'TIP_OUT_OF_RANGE' }))
+    expect(() => createPaymentInState(createSeedState(), input({ tip_pct: 50.01 }))).toThrowError(expect.objectContaining({ code: 'TIP_OUT_OF_RANGE' }))
   })
 
   it('не пропускает QR заблокированного мерчанта', () => {

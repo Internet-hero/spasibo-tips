@@ -1,0 +1,11 @@
+<mxfile host="app.diagrams.net"><diagram name="Состояния платежа"><mxGraphModel dx="1000" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="500" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="created" value="CREATED" style="rounded=1;fillColor=#E5E5E5;fontSize=18" vertex="1" parent="1"><mxGeometry x="40" y="190" width="160" height="70" as="geometry"/></mxCell>
+<mxCell id="pending" value="PENDING" style="rounded=1;fillColor=#46B8B5;fontSize=18" vertex="1" parent="1"><mxGeometry x="340" y="190" width="160" height="70" as="geometry"/></mxCell>
+<mxCell id="success" value="SUCCESS" style="rounded=1;fillColor=#46B8B5;fontSize=18" vertex="1" parent="1"><mxGeometry x="680" y="40" width="160" height="70" as="geometry"/></mxCell>
+<mxCell id="declined" value="DECLINED" style="rounded=1;fillColor=#E5E5E5;fontSize=18" vertex="1" parent="1"><mxGeometry x="680" y="190" width="160" height="70" as="geometry"/></mxCell>
+<mxCell id="canceled" value="CANCELED" style="rounded=1;fillColor=#E5E5E5;fontSize=18" vertex="1" parent="1"><mxGeometry x="340" y="350" width="160" height="70" as="geometry"/></mxCell>
+<mxCell id="e1" value="клиент подтвердил" style="endArrow=block" edge="1" parent="1" source="created" target="pending"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="шлюз: успех / проверка после таймаута" style="endArrow=block" edge="1" parent="1" source="pending" target="success"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="шлюз: отказ" style="endArrow=block" edge="1" parent="1" source="pending" target="declined"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="клиент отменил до подтверждения" style="endArrow=block" edge="1" parent="1" source="created" target="canceled"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>
