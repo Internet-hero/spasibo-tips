@@ -51,7 +51,7 @@ export function QrGenerator({ fixedEmployeeId }: { fixedEmployeeId?: string }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-      <form onSubmit={submit} className="surface h-max p-5 sm:p-6" noValidate>
+      <form onSubmit={submit} className="no-print surface h-max p-5 sm:p-6" noValidate>
         <h2 className="flex items-center gap-2 text-lg font-extrabold"><Plus className="size-5 text-accent" />Новый QR на чек</h2>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Серверная логика демо создаёт receipt_id, nonce, срок действия и HMAC-подпись. Повторный receipt_id для заведения запрещён.</p>
         {merchant && merchant.status !== 'ACTIVE' && <p role="alert" className="mt-4 rounded-2xl bg-amber-100 p-4 text-sm font-semibold text-amber-900">Заведение имеет статус {merchant.status}. Администратор должен активировать его перед генерацией QR.</p>}

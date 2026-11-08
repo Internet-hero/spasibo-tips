@@ -92,6 +92,15 @@
 @media print {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
-  .print-area { position: absolute; inset: 0; margin: auto; box-shadow: none !important; }
+  .print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 90mm;
+    margin: 15mm auto;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
   .no-print { display: none !important; }
 }
