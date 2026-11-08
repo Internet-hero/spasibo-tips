@@ -36,12 +36,12 @@ export default function Login() {
       <main className="page-container grid items-center gap-10 py-8 lg:grid-cols-2 lg:py-16">
         <section className="hidden lg:block">
           <p className="text-sm font-bold text-muted-foreground">Мерчант · официант · администратор</p>
-          <h1 className="display-font mt-4 max-w-lg text-4xl font-semibold leading-tight">У каждой роли —<br />свой контур доступа.</h1>
+          <h2 className="display-font mt-4 max-w-lg text-4xl font-semibold leading-tight">У каждой роли —<br />свой контур доступа.</h2>
           <p className="mt-5 max-w-md text-lg text-muted-foreground">Официант видит только свои чаевые. Мерчант управляет заведением. Администратор подтверждает регистрацию и контролирует платформу.</p>
           <div className="mt-8 flex items-center gap-3 text-sm font-semibold text-primary"><ShieldCheck className="size-5" />Визуальная авторизация без серверной проверки</div>
         </section>
         <section className="surface mx-auto w-full max-w-lg p-5 sm:p-8">
-          <h2 className="display-font text-2xl font-semibold">Вход в кабинет</h2>
+          <h1 className="display-font text-2xl font-semibold">Вход в кабинет</h1>
           <p className="mt-2 text-sm text-muted-foreground">Для демо введите любые непустые логин и пароль.</p>
           <div className="mt-6 grid grid-cols-2 rounded-2xl bg-muted p-1">
             <button onClick={() => { setMode('email'); setError('') }} aria-pressed={mode === 'email'} className={`min-h-11 rounded-xl text-sm font-bold transition ${mode === 'email' ? 'bg-card shadow-sm' : 'text-muted-foreground'}`}>Логин и пароль</button>

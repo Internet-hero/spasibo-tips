@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router'
 import { Toaster } from 'sonner'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import Home from '@/pages/Home'
 import Login from '@/pages/Login'
@@ -19,7 +20,7 @@ export default function App() {
   const { pathname, search } = useLocation()
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }) }, [pathname])
   return (
-    <>
+    <ErrorBoundary>
       <Suspense fallback={<div className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-full bg-primary px-5 py-2 text-sm font-bold text-primary-foreground" role="status">Загружаем кабинет…</div>}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -37,6 +38,6 @@ export default function App() {
         </Routes>
       </Suspense>
       <Toaster position="top-center" richColors closeButton toastOptions={{ className: 'font-[Manrope]' }} />
-    </>
+    </ErrorBoundary>
   )
 }
